@@ -15,8 +15,8 @@ modified_at timestamptz NOT NULL DEFAULT (now())
 
 
 -- name: CreateTransaction :one
-INSERT INTO "transactions" (amount, tag, category, transaction_date, by_user)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO "transactions" (group_id, name, transaction_date, amount, category, note, by_user)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetTransactionByID :one
@@ -82,11 +82,14 @@ OFFSET $2;
 
 -- name: UpdateTransaction :one
 UPDATE "transactions"
-SET 
-    amount = $2,
-    tag = $3,
-    category = $4,
-    by_user = $5
+SET
+    group_id = $2,
+    name = $3,
+    transaction_date = $4,
+    amount = $5,
+    category = $6,
+    note = $7,
+    by_user = $8
 WHERE id = $1
 RETURNING *;
 
