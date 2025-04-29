@@ -39,7 +39,7 @@ CREATE TABLE "splits" (
   "id" bigserial PRIMARY KEY,
   "transaction_id" bigint NOT NULL,
   "tx_amount" numeric(10,2) NOT NULL,
-  "split_percent" decimal(5,4) NOT NULL,
+  "split_percent" decimal(7,6) NOT NULL,
   "split_amount" numeric(10,2) NOT NULL,
   "split_user" bigint, -- should only be null when group member is deleted to maintain split total
   "created_at" timestamptz NOT NULL DEFAULT (now()),
