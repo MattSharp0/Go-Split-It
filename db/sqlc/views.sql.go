@@ -10,15 +10,21 @@ import (
 )
 
 const groupBalances = `-- name: GroupBalances :many
-SELECT gb.user_name, gb.balance
+SELECT 
+    c.member_name as creditor, 
+    d.member_name as debtor,
+    gb.total_owed
 FROM group_balances gb
+JOIN group_members c on c.id = gb.creditor
+JOIN group_members d on d.id = gb.debtor
 WHERE gb.group_id = $1
-ORDER BY gb.user_name
+ORDER BY c.member_name, d.member_name
 `
 
 type GroupBalancesRow struct {
-	UserName string `json:"user_name"`
-	Balance  int32  `json:"balance"`
+	Creditor  *string `json:"creditor"`
+	Debtor    *string `json:"debtor"`
+	TotalOwed int64   `json:"total_owed"`
 }
 
 func (q *Queries) GroupBalances(ctx context.Context, groupID int64) ([]GroupBalancesRow, error) {
@@ -30,7 +36,80 @@ func (q *Queries) GroupBalances(ctx context.Context, groupID int64) ([]GroupBala
 	items := []GroupBalancesRow{}
 	for rows.Next() {
 		var i GroupBalancesRow
-		if err := rows.Scan(&i.UserName, &i.Balance); err != nil {
+		if err := rows.Scan(&i.Creditor, &i.Debtor, &i.TotalOwed); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const groupBalancesNet = `-- name: GroupBalancesNet :many
+SELECT
+    gm.member_name,
+    gbn.net_balance
+FROM group_balances_net gbn
+JOIN group_members gm on gm.id = gbn.user
+WHERE gbn.group_id = $1
+ORDER BY gm.member_name
+`
+
+type GroupBalancesNetRow struct {
+	MemberName *string `json:"member_name"`
+	NetBalance int32   `json:"net_balance"`
+}
+
+func (q *Queries) GroupBalancesNet(ctx context.Context, groupID int64) ([]GroupBalancesNetRow, error) {
+	rows, err := q.db.Query(ctx, groupBalancesNet, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GroupBalancesNetRow{}
+	for rows.Next() {
+		var i GroupBalancesNetRow
+		if err := rows.Scan(&i.MemberName, &i.NetBalance); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const groupBalancesSimplified = `-- name: GroupBalancesSimplified :many
+SELECT 
+    c.member_name as creditor,
+    d.member_name as debtor, 
+    gbs.total_owed
+FROM group_balances_simple gbs
+JOIN group_members c on c.id = gbs.creditor
+JOIN group_members d on d.id = gbs.debtor
+WHERE gbs.group_id = $1
+ORDER BY c.member_name, d.member_name
+`
+
+type GroupBalancesSimplifiedRow struct {
+	Creditor  *string `json:"creditor"`
+	Debtor    *string `json:"debtor"`
+	TotalOwed int64   `json:"total_owed"`
+}
+
+func (q *Queries) GroupBalancesSimplified(ctx context.Context, groupID int64) ([]GroupBalancesSimplifiedRow, error) {
+	rows, err := q.db.Query(ctx, groupBalancesSimplified, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GroupBalancesSimplifiedRow{}
+	for rows.Next() {
+		var i GroupBalancesSimplifiedRow
+		if err := rows.Scan(&i.Creditor, &i.Debtor, &i.TotalOwed); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

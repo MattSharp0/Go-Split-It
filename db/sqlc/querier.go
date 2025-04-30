@@ -35,6 +35,8 @@ type Querier interface {
 	GetTransactionsByUserInPeriod(ctx context.Context, arg GetTransactionsByUserInPeriodParams) ([]Transaction, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	GroupBalances(ctx context.Context, groupID int64) ([]GroupBalancesRow, error)
+	GroupBalancesNet(ctx context.Context, groupID int64) ([]GroupBalancesNetRow, error)
+	GroupBalancesSimplified(ctx context.Context, groupID int64) ([]GroupBalancesSimplifiedRow, error)
 	ListGroupMembersByGroupID(ctx context.Context, arg ListGroupMembersByGroupIDParams) ([]ListGroupMembersByGroupIDRow, error)
 	ListGroups(ctx context.Context, arg ListGroupsParams) ([]Group, error)
 	ListSplits(ctx context.Context, arg ListSplitsParams) ([]Split, error)
