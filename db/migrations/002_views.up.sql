@@ -15,46 +15,46 @@ CREATE VIEW group_balances AS (
 );
 
 CREATE VIEW group_balances_simple AS (
-    WITH gdc as (
+    WITH gbc as (
         SELECT
-            gd.group_id,
-            gd.creditor,
-            gd.debtor,
-            sum(gd.total_owed) as total_owed,
-            -sum(COALESCE(gd2.total_owed, 0)) as inverse_owed,
-            sum(gd.total_owed - COALESCE(gd2.total_owed, 0)) as net_owed
-        FROM group_debts_complex gd
-        LEFT JOIN group_debts_complex gd2 
-            on gd2.group_id = gd.group_id
-            and gd2.creditor = gd.debtor
-            and gd2.debtor = gd.creditor
-        GROUP BY gd.group_id, gd.creditor, gd.debtor
-        HAVING sum(gd.total_owed - COALESCE(gd2.total_owed, 0)) > 0
-    ), gds as (
+            gb.group_id,
+            gb.creditor,
+            gb.debtor,
+            sum(gb.total_owed) as total_owed,
+            -sum(COALESCE(gb2.total_owed, 0)) as inverse_owed,
+            sum(gb.total_owed - COALESCE(gb2.total_owed, 0)) as net_owed
+        FROM group_balances gb
+        LEFT JOIN group_balances gb2 
+            on gb2.group_id = gb.group_id
+            and gb2.creditor = gb.debtor
+            and gb2.debtor = gb.creditor
+        GROUP BY gb.group_id, gb.creditor, gb.debtor
+        HAVING sum(gb.total_owed - COALESCE(gb2.total_owed, 0)) > 0
+    ), gbs as (
         SELECT 
-            gdc.group_id,
-            gdc.creditor,
-            gdc.debtor,
-            gdc.net_owed,
-            gdc2.creditor as creditor_owes,
-            COALESCE(gdc2.net_owed, 0) as chain_creditor_owed,
-            gdc.net_owed - COALESCE(gdc2.net_owed, 0) as new_net_owed
-        FROM gdc
-        LEFT JOIN gdc gdc2 on gdc2.group_id = gdc.group_id and gdc2.debtor = gdc.creditor
+            gbc.group_id,
+            gbc.creditor,
+            gbc.debtor,
+            gbc.net_owed,
+            gbc2.creditor as creditor_owes,
+            COALESCE(gbc2.net_owed, 0) as chain_creditor_owed,
+            gbc.net_owed - COALESCE(gbc2.net_owed, 0) as new_net_owed
+        FROM gbc
+        LEFT JOIN gbc gbc2 on gbc2.group_id = gbc.group_id and gbc2.debtor = gbc.creditor
     ), ua as (
         SELECT 
             group_id,
             creditor,
             debtor,
             new_net_owed as owes
-        FROM gds
+        FROM gbs
         UNION ALL
         SELECT 
             group_id,
             creditor_owes as creditor,
             debtor,
             chain_creditor_owed as owes
-        FROM gds
+        FROM gbs
         WHERE creditor_owes is not null
         UNION ALL
         SELECT
@@ -62,7 +62,7 @@ CREATE VIEW group_balances_simple AS (
             creditor_owes as creditor,
             creditor as debtor,
             -chain_creditor_owed as owes
-        FROM gds
+        FROM gbs
         WHERE creditor_owes is not null
     )
     SELECT
