@@ -13,29 +13,29 @@ import (
 )
 
 func main() {
-	textHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+	textHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelDebug,
 	})
 
 	logger := slog.New(textHandler)
 	slog.SetDefault(logger)
 
-	err := godotenv.Load()
+	err := godotenv.Load(".dev.env")
 	if err != nil {
 		log.Fatal("Failed to load env settings")
 	}
 	dbAddress := os.Getenv("DATABASE_URL")
 
 	ctx := context.Background()
-	pool, err := pgxpool.New(ctx, dbAddress) // Create a new connection pool
+
+	// Create a new database connection pool
+	pool, err := pgxpool.New(ctx, dbAddress)
 	if err != nil {
 		log.Fatalf("DB connection failed: %v", err)
 	}
-	defer pool.Close()              // Closed the pool when main exists / an error occurs
-	store, err := db.NewStore(pool) // Create a new store using the connection pool
-	if err != nil {
-		log.Fatalf("Failed to create store: %v", err)
-	}
+
+	// Close the pool when main exits / an error occurs
+	defer pool.Close()
 
 	// Test the connection to the database
 	if err := pool.Ping(ctx); err != nil {
@@ -44,9 +44,16 @@ func main() {
 		log.Println("Connected to the database successfully")
 	}
 
+	// Create a new store using the connection pool
+	store, err := db.NewStore(pool)
+	if err != nil {
+		log.Fatalf("Failed to create store: %v", err)
+	}
+
 	// Start server
-	srv := server.New(":8080", &store)
-	if err := srv.Start(); err != nil {
+	s := server.NewServer(":8080", &store)
+	if err := s.Start(); err != nil {
 		log.Fatal(err)
+
 	}
 }
