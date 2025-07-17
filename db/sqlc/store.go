@@ -18,6 +18,7 @@ type SQLStore struct {
 
 // Creates a new SQLStore which is an implementation of the Store interface
 func NewStore(connPool *pgxpool.Pool) (Store, error) {
+	// TODO return error on failure
 	return &SQLStore{
 		connPool: connPool,
 		Queries:  New(connPool),
