@@ -16,7 +16,7 @@ type Server struct {
 }
 
 // Create new server at address with acompanying db pointer.
-func NewServer(Addr string, db *db.Store) *Server {
+func NewServer(Addr string, db db.Store) *Server {
 
 	s := &Server{
 		Server: &http.Server{
@@ -25,7 +25,7 @@ func NewServer(Addr string, db *db.Store) *Server {
 			WriteTimeout: 10 * time.Second,
 			IdleTimeout:  120 * time.Second,
 		},
-		DB: db,
+		DB: &db,
 	}
 	mux := http.NewServeMux()
 	s.Server.Handler = mux
@@ -36,12 +36,17 @@ func NewServer(Addr string, db *db.Store) *Server {
 // Start the HTTP server if server is not shutdown, return error if fails
 func (s *Server) Start() error {
 	log.Printf("Server starting...")
-	err := s.Server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
-		log.Printf("Server failed to start: %v", err)
-		return err
-	}
+
+	go func() {
+		err := s.Server.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			log.Printf("Server failed to start: %v", err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
 	log.Printf("Server listening on %s\n", s.Server.Addr)
+
 	return nil
 }
 
