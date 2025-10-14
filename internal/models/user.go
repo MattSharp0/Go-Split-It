@@ -15,3 +15,11 @@ type ListUserResponse struct {
 	Limit  int32          `json:"limit"`
 	Offset int32          `json:"offset"`
 }
+
+type CreateUserRequest struct {
+	Name string `json:"name"`
+}
+
+type UpdateUserRequest struct {
+	Name string `json:"name"`
+}
