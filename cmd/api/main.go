@@ -65,6 +65,10 @@ func main() {
 	})
 
 	s.Mux().Handle("/users/", http.StripPrefix("/users", handlers.UserRoutes(s, store)))
+	s.Mux().Handle("/groups/", http.StripPrefix("/groups", handlers.GroupRoutes(s, store)))
+	s.Mux().Handle("/group_members/", http.StripPrefix("/group_members", handlers.GroupMemberRoutes(s, store)))
+	s.Mux().Handle("/transactions/", http.StripPrefix("/transactions", handlers.TransactionRoutes(s, store)))
+	s.Mux().Handle("/splits/", http.StripPrefix("/splits", handlers.SplitRoutes(s, store)))
 
 	// Start server in goroutine
 	if err := s.Start(); err != nil {
