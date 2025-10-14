@@ -46,18 +46,33 @@ func listGroupMembersByGroupID(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		// Decode optional pagination params from body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listParams db.ListGroupMembersByGroupIDParams
-		err = decoder.Decode(&listParams)
-		if err != nil {
-			// Default values if no body provided
-			listParams = db.ListGroupMembersByGroupIDParams{
-				Limit:  100,
-				Offset: 0,
+		listParams.GroupID = groupID
+		listParams.Limit = 100
+		listParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
 			}
+			listParams.Limit = int32(limit)
+		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Offset = int32(offset)
 		}
 
 		log.Printf("List GroupMembers for group %d, parameters: %v", groupID, listParams)

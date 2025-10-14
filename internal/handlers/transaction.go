@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
@@ -36,15 +37,34 @@ func TransactionRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 func listTransactions(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listTransactionParams db.ListTransactionsParams
-		err := decoder.Decode(&listTransactionParams)
-		if err != nil {
-			http.Error(w, "Bad ListTransactions request", http.StatusBadRequest)
-			return
+		listTransactionParams.Limit = 100
+		listTransactionParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
+			}
+			listTransactionParams.Limit = int32(limit)
 		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listTransactionParams.Offset = int32(offset)
+		}
+
 		log.Printf("List Transaction parameters: %v", listTransactionParams)
 
 		transactions, err := store.ListTransactions(context.Background(), listTransactionParams)
@@ -104,21 +124,33 @@ func getTransactionsByUser(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		// Decode optional pagination params from body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listParams db.GetTransactionsByUserParams
-		err = decoder.Decode(&listParams)
-		if err != nil {
-			// Default values if no body provided
-			listParams = db.GetTransactionsByUserParams{
-				ByUser: userID,
-				Limit:  100,
-				Offset: 0,
+		listParams.ByUser = userID
+		listParams.Limit = 100
+		listParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
 			}
-		} else {
-			listParams.ByUser = userID // Override with path parameter
+			listParams.Limit = int32(limit)
+		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Offset = int32(offset)
 		}
 
 		log.Printf("List Transactions for user %d, parameters: %v", userID, listParams)
@@ -180,18 +212,60 @@ func getTransactionsByGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		// Decode optional pagination params from body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listParams db.GetTransactionsByGroupInPeriodParams
-		err = decoder.Decode(&listParams)
-		if err != nil {
-			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+		listParams.GroupID = groupID
+		listParams.Limit = 100
+		listParams.Offset = 0
+
+		// Parse start_date (required)
+		startDateStr := queryParams.Get("start_date")
+		if startDateStr == "" {
+			http.Error(w, "start_date parameter is required in ISO 8601 format", http.StatusBadRequest)
 			return
 		}
+		startDate, err := time.Parse("2006-01-02", startDateStr)
+		if err != nil {
+			http.Error(w, "Invalid start_date format, use YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		listParams.StartDate = startDate
 
-		listParams.GroupID = groupID // Override with path parameter
+		// Parse end_date (required)
+		endDateStr := queryParams.Get("end_date")
+		if endDateStr == "" {
+			http.Error(w, "end_date parameter is required in ISO 8601 format", http.StatusBadRequest)
+			return
+		}
+		endDate, err := time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			http.Error(w, "Invalid end_date format, use YYYY-MM-DD", http.StatusBadRequest)
+			return
+		}
+		listParams.EndDate = endDate
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Limit = int32(limit)
+		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Offset = int32(offset)
+		}
 
 		log.Printf("List Transactions for group %d, parameters: %v", groupID, listParams)
 

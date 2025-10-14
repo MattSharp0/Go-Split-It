@@ -30,15 +30,34 @@ func GroupRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 func listGroups(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listGroupParams db.ListGroupsParams
-		err := decoder.Decode(&listGroupParams)
-		if err != nil {
-			http.Error(w, "Bad ListGroups request", http.StatusBadRequest)
-			return
+		listGroupParams.Limit = 100
+		listGroupParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
+			}
+			listGroupParams.Limit = int32(limit)
 		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listGroupParams.Offset = int32(offset)
+		}
+
 		log.Printf("List Group parameters: %v", listGroupParams)
 
 		groups, err := store.ListGroups(context.Background(), listGroupParams)

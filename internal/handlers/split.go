@@ -36,15 +36,34 @@ func SplitRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 func listSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listSplitParams db.ListSplitsParams
-		err := decoder.Decode(&listSplitParams)
-		if err != nil {
-			http.Error(w, "Bad ListSplits request", http.StatusBadRequest)
-			return
+		listSplitParams.Limit = 100
+		listSplitParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
+			}
+			listSplitParams.Limit = int32(limit)
 		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listSplitParams.Offset = int32(offset)
+		}
+
 		log.Printf("List Split parameters: %v", listSplitParams)
 
 		splits, err := store.ListSplits(context.Background(), listSplitParams)
@@ -159,21 +178,33 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		// Decode optional pagination params from body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
+		// Default values
 		var listParams db.GetSplitsByUserParams
-		err = decoder.Decode(&listParams)
-		if err != nil {
-			// Default values if no body provided
-			listParams = db.GetSplitsByUserParams{
-				SplitUser: &userID,
-				Limit:     100,
-				Offset:    0,
+		listParams.SplitUser = &userID
+		listParams.Limit = 100
+		listParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
 			}
-		} else {
-			listParams.SplitUser = &userID // Override with path parameter
+			listParams.Limit = int32(limit)
+		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Offset = int32(offset)
 		}
 
 		log.Printf("Getting splits for user ID: %d, parameters: %v", userID, listParams)

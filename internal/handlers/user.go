@@ -30,16 +30,34 @@ func UserRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 func listUsers(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Parse query parameters
+		queryParams := r.URL.Query()
 
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
+		// Default values
 		var listuserparams db.ListUsersParams
-		err := decoder.Decode(&listuserparams)
-		if err != nil {
-			http.Error(w, "Bad ListUsers request", http.StatusBadRequest)
-			return
+		listuserparams.Limit = 100
+		listuserparams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
+			}
+			listuserparams.Limit = int32(limit)
 		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listuserparams.Offset = int32(offset)
+		}
+
 		log.Printf("List User parameters: %v", listuserparams)
 
 		users, err := store.ListUsers(context.Background(), listuserparams)
@@ -90,6 +108,7 @@ func getUserByID(store db.Store) http.HandlerFunc {
 		// Convert string ID to int64
 		id, err := strconv.ParseInt(idStr, 10, 64)
 		if err != nil {
+			log.Printf("Invalid user ID format: %v", err)
 			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
 			return
 		}

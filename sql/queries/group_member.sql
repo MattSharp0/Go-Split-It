@@ -23,8 +23,8 @@ JOIN groups g ON gm.group_id = g.id
 JOIN users u ON gm.user_id = u.id
 WHERE gm.group_id = $1
 ORDER BY gm.id
-LIMIT $1
-OFFSET $2;
+LIMIT $2
+OFFSET $3;
 
 -- name: UpdateGroupMember :one
 UPDATE group_members

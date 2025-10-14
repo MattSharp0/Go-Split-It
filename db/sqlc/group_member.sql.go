@@ -131,13 +131,14 @@ JOIN groups g ON gm.group_id = g.id
 JOIN users u ON gm.user_id = u.id
 WHERE gm.group_id = $1
 ORDER BY gm.id
-LIMIT $1
-OFFSET $2
+LIMIT $2
+OFFSET $3
 `
 
 type ListGroupMembersByGroupIDParams struct {
-	Limit  int32 `json:"limit"`
-	Offset int32 `json:"offset"`
+	GroupID int64 `json:"group_id"`
+	Limit   int32 `json:"limit"`
+	Offset  int32 `json:"offset"`
 }
 
 type ListGroupMembersByGroupIDRow struct {
@@ -151,7 +152,7 @@ type ListGroupMembersByGroupIDRow struct {
 }
 
 func (q *Queries) ListGroupMembersByGroupID(ctx context.Context, arg ListGroupMembersByGroupIDParams) ([]ListGroupMembersByGroupIDRow, error) {
-	rows, err := q.db.Query(ctx, listGroupMembersByGroupID, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, listGroupMembersByGroupID, arg.GroupID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
