@@ -26,11 +26,9 @@ func TransactionRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux.HandleFunc("PATCH /{id}", updateTransaction(q))  // PATCH: Update transaction
 	mux.HandleFunc("DELETE /{id}", deleteTransaction(q)) // DELETE: Delete transaction
 
-	// User-specific routes
-	mux.HandleFunc("GET /user/{user_id}", getTransactionsByUser(q)) // GET: List transactions by user
-
-	// Group-specific routes
-	mux.HandleFunc("GET /group/{group_id}", getTransactionsByGroup(q)) // GET: List transactions by group
+	// Nested resource handlers - RESTful approach for splits
+	mux.HandleFunc("GET /{transaction_id}/splits", getSplitsByTransactionNested(q)) // GET: List splits for transaction
+	mux.HandleFunc("POST /{transaction_id}/splits", createSplitNested(q))           // POST: Create split for transaction
 
 	return mux
 }
@@ -559,6 +557,138 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
 			log.Printf("Error encoding transaction response: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Nested resource handlers
+
+// List splits for transaction
+// GET /transactions/{transaction_id}/splits
+func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {transaction_id} from path parameter
+		transactionIDStr := r.PathValue("transaction_id")
+		if transactionIDStr == "" {
+			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("Getting splits for transaction ID: %d", transactionID)
+
+		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
+		if err != nil {
+			log.Printf("GetSplitsByTransactionID returned an error: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+
+		splitResponses := make([]models.SplitResponse, len(splits))
+		for i, split := range splits {
+			splitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		count := len(splitResponses)
+
+		listSplitResponse := models.ListSplitResponse{
+			Splits: splitResponses,
+			Count:  int32(count),
+			Limit:  int32(count),
+			Offset: 0,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
+			log.Printf("Error encoding split responses: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Create split for transaction
+// POST /transactions/{transaction_id}/splits
+func createSplitNested(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {transaction_id} from path parameter
+		transactionIDStr := r.PathValue("transaction_id")
+		if transactionIDStr == "" {
+			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Decode request body
+		decoder := json.NewDecoder(r.Body)
+		defer r.Body.Close()
+
+		var createSplitReq models.CreateSplitRequest
+		err = decoder.Decode(&createSplitReq)
+		if err != nil {
+			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Override transaction_id from URL
+		createSplitReq.TransactionID = transactionID
+
+		log.Printf("Creating split for transaction: %d", createSplitReq.TransactionID)
+
+		// Create split in database
+		split, err := store.CreateSplit(context.Background(), db.CreateSplitParams{
+			TransactionID: createSplitReq.TransactionID,
+			SplitPercent:  createSplitReq.SplitPercent,
+			SplitAmount:   createSplitReq.SplitAmount,
+			SplitUser:     createSplitReq.SplitUser,
+		})
+		if err != nil {
+			log.Printf("CreateSplit returned an error: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("Created split with ID: %d", split.ID)
+
+		// Convert to response format
+		splitResponse := models.SplitResponse{
+			ID:            split.ID,
+			TransactionID: split.TransactionID,
+			TxAmount:      split.TxAmount,
+			SplitPercent:  split.SplitPercent,
+			SplitAmount:   split.SplitAmount,
+			SplitUser:     split.SplitUser,
+			CreatedAt:     split.CreatedAt,
+			ModifiedAt:    split.ModifiedAt,
+		}
+
+		// Send response with 201 Created status
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
+			log.Printf("Error encoding split response: %v", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

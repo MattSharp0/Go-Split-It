@@ -25,6 +25,9 @@ func UserRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux.HandleFunc("PATCH /{id}", updateUser(q))  // PATCH: Update user
 	mux.HandleFunc("DELETE /{id}", deleteUser(q)) // DELETE: Delete user
 
+	// Nested resource handlers - RESTful approach for user transactions
+	mux.HandleFunc("GET /{user_id}/transactions", getTransactionsByUserNested(q)) // GET: List transactions by user
+
 	return mux
 }
 
@@ -292,6 +295,98 @@ func deleteUser(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(userResponse); err != nil {
 			log.Printf("Error encoding user response: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Nested resource handler
+
+// List transactions for user
+// GET /users/{user_id}/transactions
+func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {user_id} from path parameter
+		userIDStr := r.PathValue("user_id")
+		if userIDStr == "" {
+			http.Error(w, "User ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Parse query parameters
+		queryParams := r.URL.Query()
+
+		// Default values
+		var listParams db.GetTransactionsByUserParams
+		listParams.ByUser = userID
+		listParams.Limit = 100
+		listParams.Offset = 0
+
+		// Parse limit
+		if limitStr := queryParams.Get("limit"); limitStr != "" {
+			limit, err := strconv.ParseInt(limitStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Limit = int32(limit)
+		}
+
+		// Parse offset
+		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
+			offset, err := strconv.ParseInt(offsetStr, 10, 32)
+			if err != nil {
+				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
+				return
+			}
+			listParams.Offset = int32(offset)
+		}
+
+		log.Printf("List Transactions for user %d, parameters: %v", userID, listParams)
+
+		transactions, err := store.GetTransactionsByUser(context.Background(), listParams)
+		if err != nil {
+			log.Printf("GetTransactionsByUser returned an error: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+
+		transactionResponses := make([]models.TransactionResponse, len(transactions))
+		for i, tx := range transactions {
+			transactionResponses[i] = models.TransactionResponse{
+				ID:              tx.ID,
+				GroupID:         tx.GroupID,
+				Name:            tx.Name,
+				TransactionDate: tx.TransactionDate,
+				Amount:          tx.Amount,
+				Category:        tx.Category,
+				Note:            tx.Note,
+				ByUser:          tx.ByUser,
+				CreatedAt:       tx.CreatedAt,
+				ModifiedAt:      tx.ModifiedAt,
+			}
+		}
+
+		count := len(transactionResponses)
+
+		listTransactionResponse := models.ListTransactionResponse{
+			Transactions: transactionResponses,
+			Count:        int32(count),
+			Limit:        listParams.Limit,
+			Offset:       listParams.Offset,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(listTransactionResponse); err != nil {
+			log.Printf("Error encoding transaction responses: %v", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
