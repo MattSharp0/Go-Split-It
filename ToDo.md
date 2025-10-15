@@ -1,7 +1,7 @@
 # ToDo's
 
 - Review endpoints and filters
-    - Date filters should be optional for transactions by group 
+    - ~~Date filters should be optional for transactions by group & user~~
 - Troubleshoot balances endpoint reports missing user date
 - Build out testing
 - Generate transaction for adding all splits for a transaction at once

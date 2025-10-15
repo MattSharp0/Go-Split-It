@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
@@ -325,10 +326,34 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 		queryParams := r.URL.Query()
 
 		// Default values
-		var listParams db.GetTransactionsByUserParams
+		var listParams db.GetTransactionsByUserInPeriodParams
 		listParams.ByUser = userID
+		listParams.StartDate = time.Now().AddDate(-1, 0, 0)
+		listParams.EndDate = time.Now()
 		listParams.Limit = 100
 		listParams.Offset = 0
+
+		// Parse start_date
+
+		// Parse start_date
+		if startDateStr := queryParams.Get("start_date"); startDateStr != "" {
+			startDate, err := time.Parse("2006-01-02", startDateStr)
+			if err != nil {
+				http.Error(w, "Invalid start_date format, use YYYY-MM-DD", http.StatusBadRequest)
+				return
+			}
+			listParams.StartDate = startDate
+		}
+
+		// Parse end_date
+		if endDateStr := queryParams.Get("end_date"); endDateStr != "" {
+			endDate, err := time.Parse("2006-01-02", endDateStr)
+			if err != nil {
+				http.Error(w, "Invalid end_date format, use YYYY-MM-DD", http.StatusBadRequest)
+				return
+			}
+			listParams.EndDate = endDate
+		}
 
 		// Parse limit
 		if limitStr := queryParams.Get("limit"); limitStr != "" {
@@ -352,7 +377,7 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 
 		log.Printf("List Transactions for user %d, parameters: %v", userID, listParams)
 
-		transactions, err := store.GetTransactionsByUser(context.Background(), listParams)
+		transactions, err := store.GetTransactionsByUserInPeriod(context.Background(), listParams)
 		if err != nil {
 			log.Printf("GetTransactionsByUser returned an error: %v", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)

@@ -475,34 +475,33 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 		// Default values
 		var listParams db.GetTransactionsByGroupInPeriodParams
 		listParams.GroupID = groupID
+
+		// Default to past year, TODO: make this configurable
+		listParams.StartDate = time.Now().AddDate(-1, 0, 0)
+		listParams.EndDate = time.Now()
+
 		listParams.Limit = 100
 		listParams.Offset = 0
 
-		// Parse start_date (required)
-		startDateStr := queryParams.Get("start_date")
-		if startDateStr == "" {
-			http.Error(w, "start_date parameter is required in ISO 8601 format", http.StatusBadRequest)
-			return
+		// Parse start_date
+		if startDateStr := queryParams.Get("start_date"); startDateStr != "" {
+			startDate, err := time.Parse("2006-01-02", startDateStr)
+			if err != nil {
+				http.Error(w, "Invalid start_date format, use YYYY-MM-DD", http.StatusBadRequest)
+				return
+			}
+			listParams.StartDate = startDate
 		}
-		startDate, err := time.Parse("2006-01-02", startDateStr)
-		if err != nil {
-			http.Error(w, "Invalid start_date format, use YYYY-MM-DD", http.StatusBadRequest)
-			return
-		}
-		listParams.StartDate = startDate
 
-		// Parse end_date (required)
-		endDateStr := queryParams.Get("end_date")
-		if endDateStr == "" {
-			http.Error(w, "end_date parameter is required in ISO 8601 format", http.StatusBadRequest)
-			return
+		// Parse end_date
+		if endDateStr := queryParams.Get("end_date"); endDateStr != "" {
+			endDate, err := time.Parse("2006-01-02", endDateStr)
+			if err != nil {
+				http.Error(w, "Invalid end_date format, use YYYY-MM-DD", http.StatusBadRequest)
+				return
+			}
+			listParams.EndDate = endDate
 		}
-		endDate, err := time.Parse("2006-01-02", endDateStr)
-		if err != nil {
-			http.Error(w, "Invalid end_date format, use YYYY-MM-DD", http.StatusBadRequest)
-			return
-		}
-		listParams.EndDate = endDate
 
 		// Parse limit
 		if limitStr := queryParams.Get("limit"); limitStr != "" {
