@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,21 +16,26 @@ import (
 func SplitRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Root path handlers
-	mux.HandleFunc("POST /", createSplit(q)) // POST: Create split
-	mux.HandleFunc("GET /", listSplits(q))   // GET: List splits
-
-	// ID path handlers
-	mux.HandleFunc("GET /{id}", getSplitByID(q))   // GET: Get split by ID
-	mux.HandleFunc("PUT /{id}", updateSplit(q))    // PUT: Update split
-	mux.HandleFunc("PATCH /{id}", updateSplit(q))  // PATCH: Update split
-	mux.HandleFunc("DELETE /{id}", deleteSplit(q)) // DELETE: Delete split
+	// Batch operations
+	mux.HandleFunc("POST /batch", createSplitsForTransaction(q))
+	mux.HandleFunc("PATCH /transaction/{transaction_id}/batch", updateTransactionSplits(q))
+	mux.HandleFunc("PUT /transaction/{transaction_id}/batch", updateTransactionSplits(q))
 
 	// Transaction-specific routes
-	mux.HandleFunc("GET /transaction/{transaction_id}", getSplitsByTransactionID(q)) // GET: List splits by transaction
+	mux.HandleFunc("GET /transaction/{transaction_id}", getSplitsByTransactionID(q))
 
 	// User-specific routes
-	mux.HandleFunc("GET /user/{user_id}", getSplitsByUser(q)) // GET: List splits by user
+	mux.HandleFunc("GET /user/{user_id}", getSplitsByUser(q))
+
+	// ID path handlers
+	mux.HandleFunc("GET /{id}", getSplitByID(q))
+	mux.HandleFunc("PUT /{id}", updateSplit(q))
+	mux.HandleFunc("PATCH /{id}", updateSplit(q))
+	mux.HandleFunc("DELETE /{id}", deleteSplit(q))
+
+	// Root path handlers
+	mux.HandleFunc("POST /", createSplit(q))
+	mux.HandleFunc("GET /", listSplits(q))
 
 	return mux
 }
@@ -354,6 +360,9 @@ func createSplit(store db.Store) http.HandlerFunc {
 	}
 }
 
+// updateSplit updates an individual split
+// WARNING: This can leave the parent transaction in an invalid state where splits don't add up to 100%
+// Consider using updateTransactionSplits (PUT /transaction/{id}/batch) instead for safer operations
 func updateSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
@@ -381,7 +390,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Updating split with ID: %d", id)
+		log.Printf("WARNING: Updating individual split with ID: %d - this may leave transaction in invalid state", id)
 
 		// Update split in database
 		split, err := store.UpdateSplit(context.Background(), db.UpdateSplitParams{
@@ -418,6 +427,9 @@ func updateSplit(store db.Store) http.HandlerFunc {
 	}
 }
 
+// deleteSplit deletes an individual split
+// WARNING: This can leave the parent transaction in an invalid state where splits don't add up to 100%
+// Use updateTransactionSplits (PUT /transaction/{id}/batch) instead for safer operations
 func deleteSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
@@ -434,7 +446,7 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Deleting split with ID: %d", id)
+		log.Printf("WARNING: Deleting individual split with ID: %d - this may leave transaction in invalid state", id)
 
 		// Delete split from database
 		split, err := store.DeleteSplit(context.Background(), id)
@@ -460,6 +472,205 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
 			log.Printf("Error encoding split response: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func createSplitsForTransaction(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		decoder := json.NewDecoder(r.Body)
+		defer r.Body.Close()
+
+		var req struct {
+			TransactionID int64                       `json:"transaction_id"`
+			Splits        []models.CreateSplitRequest `json:"splits"`
+		}
+
+		if err := decoder.Decode(&req); err != nil {
+			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if req.TransactionID == 0 {
+			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Splits) == 0 {
+			http.Error(w, "At least one split is required", http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("Creating %d splits for transaction: %d", len(req.Splits), req.TransactionID)
+
+		// Convert to DB params
+		dbSplits := make([]db.CreateSplitParams, len(req.Splits))
+		for i, split := range req.Splits {
+			dbSplits[i] = db.CreateSplitParams{
+				TransactionID: req.TransactionID,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+			}
+		}
+
+		// Execute transaction
+		result, err := store.CreateSplitsTx(context.Background(), db.CreateSplitsTxParams{
+			TransactionID: req.TransactionID,
+			Splits:        dbSplits,
+		})
+		if err != nil {
+			log.Printf("CreateSplitsTx returned an error: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to create splits: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Convert to response format
+		splitResponses := make([]models.SplitResponse, len(result.Splits))
+		for i, split := range result.Splits {
+			splitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		response := struct {
+			Transaction models.TransactionResponse `json:"transaction"`
+			Splits      []models.SplitResponse     `json:"splits"`
+		}{
+			Transaction: models.TransactionResponse{
+				ID:              result.Transaction.ID,
+				GroupID:         result.Transaction.GroupID,
+				Name:            result.Transaction.Name,
+				TransactionDate: result.Transaction.TransactionDate,
+				Amount:          result.Transaction.Amount,
+				Category:        result.Transaction.Category,
+				Note:            result.Transaction.Note,
+				ByUser:          result.Transaction.ByUser,
+				CreatedAt:       result.Transaction.CreatedAt,
+				ModifiedAt:      result.Transaction.ModifiedAt,
+			},
+			Splits: splitResponses,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Error encoding response: %v", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+func updateTransactionSplits(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {transaction_id} from path parameter
+		transactionIDStr := r.PathValue("transaction_id")
+		if transactionIDStr == "" {
+			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Decode request body
+		decoder := json.NewDecoder(r.Body)
+		defer r.Body.Close()
+
+		var req struct {
+			Splits []models.CreateSplitRequest `json:"splits"`
+		}
+
+		if err := decoder.Decode(&req); err != nil {
+			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Splits) == 0 {
+			http.Error(w, "At least one split is required", http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("Updating splits for transaction %d: replacing with %d new splits", transactionID, len(req.Splits))
+
+		// Convert to DB params
+		dbSplits := make([]db.CreateSplitParams, len(req.Splits))
+		for i, split := range req.Splits {
+			dbSplits[i] = db.CreateSplitParams{
+				TransactionID: transactionID,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+			}
+		}
+
+		// Execute transaction to replace all splits
+		result, err := store.UpdateTransactionSplitsTx(context.Background(), db.UpdateTransactionSplitsTxParams{
+			TransactionID: transactionID,
+			Splits:        dbSplits,
+		})
+		if err != nil {
+			log.Printf("UpdateTransactionSplitsTx returned an error: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to update splits: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Convert to response format
+		splitResponses := make([]models.SplitResponse, len(result.NewSplits))
+		for i, split := range result.NewSplits {
+			splitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		deletedSplitResponses := make([]models.SplitResponse, len(result.DeletedSplits))
+		for i, split := range result.DeletedSplits {
+			deletedSplitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		response := struct {
+			DeletedSplits []models.SplitResponse `json:"deleted_splits"`
+			NewSplits     []models.SplitResponse `json:"new_splits"`
+			Message       string                 `json:"message"`
+		}{
+			DeletedSplits: deletedSplitResponses,
+			NewSplits:     splitResponses,
+			Message:       fmt.Sprintf("Successfully replaced %d splits with %d new splits", len(result.DeletedSplits), len(result.NewSplits)),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			log.Printf("Error encoding response: %v", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
