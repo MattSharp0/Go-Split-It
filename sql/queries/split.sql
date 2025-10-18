@@ -13,8 +13,8 @@ modified_at timestamptz NOT NULL DEFAULT (now())
 */
 
 -- name: CreateSplit :one
-INSERT INTO "splits" (transaction_id, split_percent, split_amount, split_user) 
-VALUES ($1, $2, $3, $4) 
+INSERT INTO "splits" (transaction_id, tx_amount, split_percent, split_amount, split_user) 
+VALUES ($1, (SELECT amount from transactions where id = $1), $2, $3, $4) 
 RETURNING *;
 
 -- name: GetSplitByID :one
