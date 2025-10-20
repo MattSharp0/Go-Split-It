@@ -2,21 +2,24 @@ package server
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 )
 
 type Server struct {
 	Server *http.Server
+	mux    *http.ServeMux
 	DB     *db.Store
-	// Logger *log.Logger // TODO add specific logger to server
+	Logger *slog.Logger
 }
 
-// Create new server at address with acompanying db pointer.
-func NewServer(Addr string, db db.Store) *Server {
+// Create new server at address with accompanying db pointer and logger.
+func NewServer(Addr string, db db.Store, log *slog.Logger) *Server {
+	mux := http.NewServeMux()
 
 	s := &Server{
 		Server: &http.Server{
@@ -24,51 +27,51 @@ func NewServer(Addr string, db db.Store) *Server {
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 10 * time.Second,
 			IdleTimeout:  120 * time.Second,
+			Handler:      logger.HTTPMiddleware(mux), // Wrap with logging middleware
 		},
-		DB: &db,
+		mux:    mux,
+		DB:     &db,
+		Logger: log,
 	}
-	mux := http.NewServeMux()
-	s.Server.Handler = mux
 
 	return s
 }
 
 // Start the HTTP server if server is not shutdown, return error if fails
 func (s *Server) Start() error {
-	log.Printf("Server starting...")
+	s.Logger.Debug("Server starting...", slog.String("address", s.Server.Addr))
 
 	go func() {
 		err := s.Server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			log.Printf("Server failed to start: %v", err)
+			s.Logger.Error("Server failed to start", "error", err)
 		}
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-	log.Printf("Server listening on %s\n", s.Server.Addr)
+	s.Logger.Info("Server listening", slog.String("address", s.Server.Addr))
 
 	return nil
 }
 
 // Shutdown server *gracefully* or return error
 func (s *Server) Stop() error {
-	log.Printf("Server shutting down...")
+	s.Logger.Info("Server shutting down...")
 
-	// TODO: Update Context
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	err := s.Server.Shutdown(ctx)
 	if err != nil {
-		log.Printf("Server failed to shutdown: %v", err)
+		s.Logger.Error("Server failed to shutdown gracefully", "error", err)
 		return err
 	}
-	log.Printf("Server shutdown complete")
+	s.Logger.Info("Server shutdown complete")
 	return nil
 }
 
 // Exposes server mux.
 // Register routes via s.Mux().Handlefunc(<route>, <handler>)
 func (s *Server) Mux() *http.ServeMux {
-	return s.Server.Handler.(*http.ServeMux)
+	return s.mux
 }

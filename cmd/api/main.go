@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,23 +10,35 @@ import (
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
 	"github.com/MattSharp0/transaction-split-go/internal/handlers"
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	textHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})
-
-	logger := slog.New(textHandler)
-	slog.SetDefault(logger)
-
+	// Load environment variables first
 	err := godotenv.Load(".dev.env")
 	if err != nil {
-		log.Fatal("Failed to load env settings")
+		slog.Error("Failed to load env settings", "error", err)
+		os.Exit(1)
 	}
+
+	// Initialize logger from environment config
+	logCfg := logger.LoadConfigFromEnv()
+	log, err := logger.InitLogger(logCfg)
+	if err != nil {
+		slog.Error("Failed to initialize logger", "error", err)
+		os.Exit(1)
+	}
+
+	log.Info("Application starting",
+		slog.String("environment", os.Getenv("ENVIROMENT")),
+		slog.String("version", os.Getenv("VERSION")),
+		slog.String("log_level", string(logCfg.Level)),
+		slog.String("log_output", string(logCfg.Output)),
+	)
+
 	dbAddress := os.Getenv("DATABASE_URL")
 
 	ctx := context.Background()
@@ -35,29 +46,28 @@ func main() {
 	// Create a new database connection pool
 	pool, err := pgxpool.New(ctx, dbAddress)
 	if err != nil {
-		log.Fatalf("DB connection failed: %v", err)
+		log.Error("DB connection failed", "error", err)
+		os.Exit(1)
 	}
-
-	// Close the pool when main exits / an error occurs
 	defer pool.Close()
 
 	// Test the connection to the database
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("Failed to ping database: %v", err)
-	} else {
-		log.Println("Connected to the database successfully")
+		log.Error("Failed to ping database", "error", err)
+		os.Exit(1)
 	}
+	log.Info("Connected to the database successfully")
 
 	// Create a new store using the connection pool
 	store, err := db.NewStore(pool)
 	if err != nil {
-		log.Fatalf("Failed to create store: %v", err)
-	} else {
-		log.Println("Store created successfully")
+		log.Error("Failed to create store", "error", err)
+		os.Exit(1)
 	}
+	log.Debug("Store created successfully")
 
-	// Initialize server
-	s := server.NewServer(":8080", store)
+	// Initialize server with logger
+	s := server.NewServer(":8080", store, log)
 
 	s.Mux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -72,17 +82,23 @@ func main() {
 
 	// Start server in goroutine
 	if err := s.Start(); err != nil {
-		log.Fatal(err)
+		log.Error("Failed to start server", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("Server started successfully")
+	log.Info("Server started successfully")
 
 	// Wait for interrupt signal to gracefully shutdown
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
+	log.Info("Shutdown signal received")
+
 	if err := s.Stop(); err != nil {
-		log.Fatal(err)
+		log.Error("Error during shutdown", "error", err)
+		os.Exit(1)
 	}
+
+	log.Info("Application shutdown gracefully")
 }

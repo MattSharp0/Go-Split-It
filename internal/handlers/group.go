@@ -3,12 +3,13 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
 )
@@ -68,11 +69,11 @@ func listGroups(store db.Store) http.HandlerFunc {
 			listGroupParams.Offset = int32(offset)
 		}
 
-		log.Printf("List Group parameters: %v", listGroupParams)
+		logger.Debug("Listing groups", "limit", listGroupParams.Limit, "offset", listGroupParams.Offset)
 
 		groups, err := store.ListGroups(context.Background(), listGroupParams)
 		if err != nil {
-			log.Printf("ListGroups returned an error: %v", err)
+			logger.Error("Failed to list groups", "error", err) // TODO: check error type to determine if groups not found or unable to list groups
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -96,7 +97,7 @@ func listGroups(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listGroupResponse); err != nil {
-			log.Printf("Error encoding group responses: %v", err)
+			logger.Error("Failed to encode group responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -119,12 +120,12 @@ func getGroupByID(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting group with ID: %d", id)
+		logger.Debug("Getting group by ID", "group_id", id)
 
 		// Get group from database
 		group, err := store.GetGroupByID(context.Background(), id)
 		if err != nil {
-			log.Printf("GetGroupByID (%v) returned an error: %v", id, err)
+			logger.Error("Failed to get group by ID", "error", err, "group_id", id) // TODO: check error type to determine if group not found or unable to get group
 			http.Error(w, "Group not found", http.StatusNotFound)
 			return
 		}
@@ -138,7 +139,7 @@ func getGroupByID(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			log.Printf("Error encoding group response: %v", err)
+			logger.Error("Failed to encode group response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -164,16 +165,16 @@ func createGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Creating group with name: %s", createGroupReq.Name)
+		logger.Debug("Creating group", slog.String("name", createGroupReq.Name))
 
 		// Create group in database
 		group, err := store.CreateGroup(context.Background(), createGroupReq.Name)
 		if err != nil {
-			log.Printf("CreateGroup returned an error: %v", err)
+			logger.Error("Failed to create group", "error", err) // TODO: check error type to determine if group not found or unable to create group
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created group '%s' with ID: %d", group.Name, group.ID)
+		logger.Debug("Group created successfully", slog.Int64("group_id", group.ID), slog.String("name", group.Name))
 
 		// Convert to response format
 		groupResponse := models.GroupResponse{
@@ -185,7 +186,7 @@ func createGroup(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			log.Printf("Error encoding group response: %v", err)
+			logger.Error("Failed to encode group response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -225,7 +226,7 @@ func updateGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Updating group with ID: %d, new name: %s", id, updateGroupReq.Name)
+		logger.Debug("Updating group", "group_id", id, "new_name", updateGroupReq.Name)
 
 		// Update group in database
 		group, err := store.UpdateGroup(context.Background(), db.UpdateGroupParams{
@@ -233,7 +234,7 @@ func updateGroup(store db.Store) http.HandlerFunc {
 			Name: updateGroupReq.Name,
 		})
 		if err != nil {
-			log.Printf("UpdateGroup returned an error: %v", err)
+			logger.Error("Failed to update group", "error", err, "group_id", id) // TODO: check error type to determine if group not found or unable to update
 			http.Error(w, "Group not found or unable to update", http.StatusNotFound)
 			return
 		}
@@ -247,7 +248,7 @@ func updateGroup(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			log.Printf("Error encoding group response: %v", err)
+			logger.Error("Failed to encode group response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -270,12 +271,12 @@ func deleteGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Deleting group with ID: %d", id)
+		logger.Debug("Deleting group", "group_id", id)
 
 		// Delete group from database
 		group, err := store.DeleteGroup(context.Background(), id)
 		if err != nil {
-			log.Printf("DeleteGroup returned an error: %v", err)
+			logger.Error("Failed to delete group", "error", err, "group_id", id) // TODO: check error type to determine if group not found or unable to delete
 			http.Error(w, "Group not found or unable to delete", http.StatusNotFound)
 			return
 		}
@@ -289,7 +290,7 @@ func deleteGroup(store db.Store) http.HandlerFunc {
 		// Send response with deleted group data
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			log.Printf("Error encoding group response: %v", err)
+			logger.Error("Failed to encode group response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -345,11 +346,11 @@ func listGroupMembers(store db.Store) http.HandlerFunc {
 			listParams.Offset = int32(offset)
 		}
 
-		log.Printf("List GroupMembers for group %d, parameters: %v", groupID, listParams)
+		logger.Debug("Listing group members", "group_id", groupID, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		groupMembers, err := store.ListGroupMembersByGroupID(context.Background(), listParams)
 		if err != nil {
-			log.Printf("ListGroupMembersByGroupID returned an error: %v", err)
+			logger.Error("Failed to list group members", "error", err, "group_id", groupID) // TODO: check error type to determine if group members not found or unable to list group members
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -378,7 +379,7 @@ func listGroupMembers(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listGroupMemberResponse); err != nil {
-			log.Printf("Error encoding group member responses: %v", err)
+			logger.Error("Failed to encode group member responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -417,7 +418,7 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 		// Override group_id from URL
 		createGroupMemberReq.GroupID = groupID
 
-		log.Printf("Creating group member for group: %d, user: %v", createGroupMemberReq.GroupID, createGroupMemberReq.UserID)
+		logger.Debug("Creating group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID)
 
 		// Create group member in database
 		groupMember, err := store.CreateGroupMember(context.Background(), db.CreateGroupMemberParams{
@@ -425,11 +426,11 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 			UserID:  createGroupMemberReq.UserID,
 		})
 		if err != nil {
-			log.Printf("CreateGroupMember returned an error: %v", err)
+			logger.Error("Failed to create group member", "error", err) // TODO: check error type to determine if group member not found or unable to create group member
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created group member with ID: %d", groupMember.ID)
+		logger.Debug("Group member created successfully", "group_member_id", groupMember.ID)
 
 		// Convert to response format
 		groupMemberResponse := models.GroupMemberResponse{
@@ -444,7 +445,7 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(groupMemberResponse); err != nil {
-			log.Printf("Error encoding group member response: %v", err)
+			logger.Error("Failed to encode group member response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -523,11 +524,11 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 			listParams.Offset = int32(offset)
 		}
 
-		log.Printf("List Transactions for group %d, parameters: %v", groupID, listParams)
+		logger.Debug("Listing transactions for group", "group_id", groupID, "start_date", listParams.StartDate, "end_date", listParams.EndDate, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		transactions, err := store.GetTransactionsByGroupInPeriod(context.Background(), listParams)
 		if err != nil {
-			log.Printf("GetTransactionsByGroupInPeriod returned an error: %v", err)
+			logger.Error("Failed to get transactions by group", "error", err, "group_id", groupID) // TODO: check error type to determine if transactions not found or unable to get transactions
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -559,7 +560,7 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listTransactionResponse); err != nil {
-			log.Printf("Error encoding transaction responses: %v", err)
+			logger.Error("Failed to encode transaction responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -608,7 +609,7 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Creating transaction: %s for group: %d", createTransactionReq.Name, createTransactionReq.GroupID)
+		logger.Debug("Creating transaction", slog.String("name", createTransactionReq.Name), slog.Int64("group_id", createTransactionReq.GroupID))
 
 		// Create transaction in database
 		transaction, err := store.CreateTransaction(context.Background(), db.CreateTransactionParams{
@@ -621,11 +622,11 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 			ByUser:          createTransactionReq.ByUser,
 		})
 		if err != nil {
-			log.Printf("CreateTransaction returned an error: %v", err)
+			logger.Error("Failed to create transaction", "error", err) // TODO: check error type to determine if transaction not found or unable to create transaction
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created transaction '%s' with ID: %d", transaction.Name, transaction.ID)
+		logger.Debug("Transaction created successfully", slog.Int64("transaction_id", transaction.ID), slog.String("name", transaction.Name))
 
 		// Convert to response format
 		transactionResponse := models.TransactionResponse{
@@ -645,7 +646,7 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			log.Printf("Error encoding transaction response: %v", err)
+			logger.Error("Failed to encode transaction response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -670,26 +671,26 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting balances for group %d", groupID)
+		logger.Debug("Getting balances for group", "group_id", groupID)
 
 		// Get all three types of balances
 		balances, err := store.GroupBalances(context.Background(), groupID)
 		if err != nil {
-			log.Printf("GroupBalances returned an error: %v", err)
+			logger.Error("Failed to get group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if balances not found or unable to get balances
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
 
 		netBalances, err := store.GroupBalancesNet(context.Background(), groupID)
 		if err != nil {
-			log.Printf("GroupBalancesNet returned an error: %v", err)
+			logger.Error("Failed to get group net balances", "error", err, "group_id", groupID) // TODO: check error type to determine if net balances not found or unable to get net balances
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
 
 		simplifiedBalances, err := store.GroupBalancesSimplified(context.Background(), groupID)
 		if err != nil {
-			log.Printf("GroupBalancesSimplified returned an error: %v", err)
+			logger.Error("Failed to get simplified group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if simplified balances not found or unable to get simplified balances
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -753,7 +754,7 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("Error encoding balance response: %v", err)
+			logger.Error("Failed to encode balance response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
 )
@@ -70,11 +70,11 @@ func listSplits(store db.Store) http.HandlerFunc {
 			listSplitParams.Offset = int32(offset)
 		}
 
-		log.Printf("List Split parameters: %v", listSplitParams)
+		logger.Debug("Listing splits", "limit", listSplitParams.Limit, "offset", listSplitParams.Offset)
 
 		splits, err := store.ListSplits(context.Background(), listSplitParams)
 		if err != nil {
-			log.Printf("ListSplits returned an error: %v", err)
+			logger.Error("Failed to list splits", "error", err) // TODO: check error type to determine if splits not found or unable to list splits
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -104,7 +104,7 @@ func listSplits(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			log.Printf("Error encoding split responses: %v", err)
+			logger.Error("Failed to encode split responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -127,11 +127,11 @@ func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting splits for transaction ID: %d", transactionID)
+		logger.Debug("Getting splits for transaction", "transaction_id", transactionID)
 
 		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
 		if err != nil {
-			log.Printf("GetSplitsByTransactionID returned an error: %v", err)
+			logger.Error("Failed to get splits by transaction ID", "error", err, "transaction_id", transactionID) // TODO: check error type to determine if splits not found or unable to get splits
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -161,7 +161,7 @@ func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			log.Printf("Error encoding split responses: %v", err)
+			logger.Error("Failed to encode split responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -213,11 +213,11 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 			listParams.Offset = int32(offset)
 		}
 
-		log.Printf("Getting splits for user ID: %d, parameters: %v", userID, listParams)
+		logger.Debug("Getting splits for user", "user_id", userID, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		splits, err := store.GetSplitsByUser(context.Background(), listParams)
 		if err != nil {
-			log.Printf("GetSplitsByUser returned an error: %v", err)
+			logger.Error("Failed to get splits by user", "error", err, "user_id", userID) // TODO: check error type to determine if splits not found or unable to get splits
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -247,7 +247,7 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			log.Printf("Error encoding split responses: %v", err)
+			logger.Error("Failed to encode split responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -270,12 +270,12 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting split with ID: %d", id)
+		logger.Debug("Getting split by ID", "split_id", id)
 
 		// Get split from database
 		split, err := store.GetSplitByID(context.Background(), id)
 		if err != nil {
-			log.Printf("GetSplitByID (%v) returned an error: %v", id, err)
+			logger.Error("Failed to get split by ID", "error", err, "split_id", id) // TODO: check error type to determine if split not found or unable to get split
 			http.Error(w, "Split not found", http.StatusNotFound)
 			return
 		}
@@ -295,7 +295,7 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			log.Printf("Error encoding split response: %v", err)
+			logger.Error("Failed to encode split response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -321,7 +321,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Creating split for transaction: %d", createSplitReq.TransactionID)
+		logger.Debug("Creating split", "transaction_id", createSplitReq.TransactionID)
 
 		// Create split in database
 		split, err := store.CreateSplit(context.Background(), db.CreateSplitParams{
@@ -331,11 +331,11 @@ func createSplit(store db.Store) http.HandlerFunc {
 			SplitUser:     createSplitReq.SplitUser,
 		})
 		if err != nil {
-			log.Printf("CreateSplit returned an error: %v", err)
+			logger.Error("Failed to create split", "error", err) // TODO: check error type to determine if split not found or unable to create split
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created split with ID: %d", split.ID)
+		logger.Debug("Split created successfully", "split_id", split.ID, "transaction_id", createSplitReq.TransactionID)
 
 		// Convert to response format
 		splitResponse := models.SplitResponse{
@@ -353,7 +353,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			log.Printf("Error encoding split response: %v", err)
+			logger.Error("Failed to encode split response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -390,7 +390,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("WARNING: Updating individual split with ID: %d - this may leave transaction in invalid state", id)
+		logger.Warn("Updating individual split - this may leave transaction in invalid state", "split_id", id)
 
 		// Update split in database
 		split, err := store.UpdateSplit(context.Background(), db.UpdateSplitParams{
@@ -400,7 +400,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 			SplitUser:    updateSplitReq.SplitUser,
 		})
 		if err != nil {
-			log.Printf("UpdateSplit returned an error: %v", err)
+			logger.Error("Failed to update split", "error", err, "split_id", id) // TODO: check error type to determine if split not found or unable to update split
 			http.Error(w, "Split not found or unable to update", http.StatusNotFound)
 			return
 		}
@@ -420,7 +420,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			log.Printf("Error encoding split response: %v", err)
+			logger.Error("Failed to encode split response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -446,12 +446,12 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("WARNING: Deleting individual split with ID: %d - this may leave transaction in invalid state", id)
+		logger.Warn("Deleting individual split - this may leave transaction in invalid state", "split_id", id)
 
 		// Delete split from database
 		split, err := store.DeleteSplit(context.Background(), id)
 		if err != nil {
-			log.Printf("DeleteSplit returned an error: %v", err)
+			logger.Error("Failed to delete split", "error", err, "split_id", id) // TODO: check error type to determine if split not found or unable to delete split
 			http.Error(w, "Split not found or unable to delete", http.StatusNotFound)
 			return
 		}
@@ -471,7 +471,7 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 		// Send response with deleted split data
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			log.Printf("Error encoding split response: %v", err)
+			logger.Error("Failed to encode split response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -503,7 +503,7 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Creating %d splits for transaction: %d", len(req.Splits), req.TransactionID)
+		logger.Debug("Creating multiple splits", "split_count", len(req.Splits), "transaction_id", req.TransactionID)
 
 		// Convert to DB params
 		dbSplits := make([]db.CreateSplitParams, len(req.Splits))
@@ -522,7 +522,7 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 			Splits:        dbSplits,
 		})
 		if err != nil {
-			log.Printf("CreateSplitsTx returned an error: %v", err)
+			logger.Error("Failed to create splits", "error", err) // TODO: check error type to determine if splits not found or unable to create splits
 			http.Error(w, fmt.Sprintf("Failed to create splits: %v", err), http.StatusBadRequest)
 			return
 		}
@@ -564,7 +564,7 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			logger.Error("Failed to encode response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -605,7 +605,7 @@ func updateTransactionSplits(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Updating splits for transaction %d: replacing with %d new splits", transactionID, len(req.Splits))
+		logger.Debug("Updating transaction splits", "transaction_id", transactionID, "new_split_count", len(req.Splits))
 
 		// Convert to DB params
 		dbSplits := make([]db.CreateSplitParams, len(req.Splits))
@@ -624,7 +624,7 @@ func updateTransactionSplits(store db.Store) http.HandlerFunc {
 			Splits:        dbSplits,
 		})
 		if err != nil {
-			log.Printf("UpdateTransactionSplitsTx returned an error: %v", err)
+			logger.Error("Failed to update transaction splits", "error", err, "transaction_id", transactionID) // TODO: check error type to determine if splits not found or unable to update splits
 			http.Error(w, fmt.Sprintf("Failed to update splits: %v", err), http.StatusBadRequest)
 			return
 		}
@@ -670,7 +670,7 @@ func updateTransactionSplits(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
-			log.Printf("Error encoding response: %v", err)
+			logger.Error("Failed to encode response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

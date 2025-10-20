@@ -3,11 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
 )
@@ -62,11 +63,14 @@ func listTransactions(store db.Store) http.HandlerFunc {
 			listTransactionParams.Offset = int32(offset)
 		}
 
-		log.Printf("List Transaction parameters: %v", listTransactionParams)
+		logger.Debug("Listing transactions",
+			"limit", listTransactionParams.Limit,
+			"offset", listTransactionParams.Offset,
+		)
 
 		transactions, err := store.ListTransactions(context.Background(), listTransactionParams)
 		if err != nil {
-			log.Printf("ListTransactions returned an error: %v", err)
+			logger.Error("Failed to list transactions", "error", err) // TODO: check error type to determine if transactions not found or unable to list transactions
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -98,7 +102,7 @@ func listTransactions(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listTransactionResponse); err != nil {
-			log.Printf("Error encoding transaction responses: %v", err)
+			logger.Error("Failed to encode transaction responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -121,12 +125,12 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting transaction with ID: %d", id)
+		logger.Debug("Getting transaction by ID", "transaction_id", id)
 
 		// Get transaction from database
 		transaction, err := store.GetTransactionByID(context.Background(), id)
 		if err != nil {
-			log.Printf("GetTransactionByID (%v) returned an error: %v", id, err)
+			logger.Error("Failed to get transaction by ID", "error", err, "transaction_id", id) // TODO: check error type to determine if transaction not found or unable to get transaction
 			http.Error(w, "Transaction not found", http.StatusNotFound)
 			return
 		}
@@ -148,7 +152,7 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			log.Printf("Error encoding transaction response: %v", err)
+			logger.Error("Failed to encode transaction response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -182,7 +186,10 @@ func createTransaction(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Creating transaction: %s for group: %d", createTransactionReq.Name, createTransactionReq.GroupID)
+		logger.Debug("Creating transaction",
+			slog.String("name", createTransactionReq.Name),
+			slog.Int64("group_id", createTransactionReq.GroupID),
+		)
 
 		// Create transaction in database
 		transaction, err := store.CreateTransaction(context.Background(), db.CreateTransactionParams{
@@ -195,11 +202,14 @@ func createTransaction(store db.Store) http.HandlerFunc {
 			ByUser:          createTransactionReq.ByUser,
 		})
 		if err != nil {
-			log.Printf("CreateTransaction returned an error: %v", err)
+			logger.Error("Failed to create transaction", "error", err) // TODO: check error type to determine if transaction not found or unable to create transaction
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created transaction '%s' with ID: %d", transaction.Name, transaction.ID)
+		logger.Debug("Transaction created successfully",
+			slog.Int64("transaction_id", transaction.ID),
+			slog.String("name", transaction.Name),
+		)
 
 		// Convert to response format
 		transactionResponse := models.TransactionResponse{
@@ -219,7 +229,7 @@ func createTransaction(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			log.Printf("Error encoding transaction response: %v", err)
+			logger.Error("Failed to encode transaction response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -267,7 +277,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Updating transaction with ID: %d", id)
+		logger.Debug("Updating transaction", "transaction_id", id)
 
 		// Update transaction in database
 		transaction, err := store.UpdateTransaction(context.Background(), db.UpdateTransactionParams{
@@ -281,7 +291,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 			ByUser:          updateTransactionReq.ByUser,
 		})
 		if err != nil {
-			log.Printf("UpdateTransaction returned an error: %v", err)
+			logger.Error("Failed to update transaction", "error", err, "transaction_id", id) // TODO: check error type to determine if transaction not found or unable to update
 			http.Error(w, "Transaction not found or unable to update", http.StatusNotFound)
 			return
 		}
@@ -303,7 +313,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			log.Printf("Error encoding transaction response: %v", err)
+			logger.Error("Failed to encode transaction response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -326,12 +336,12 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Deleting transaction with ID: %d", id)
+		logger.Debug("Deleting transaction", "transaction_id", id)
 
 		// Delete transaction from database
 		transaction, err := store.DeleteTransaction(context.Background(), id)
 		if err != nil {
-			log.Printf("DeleteTransaction returned an error: %v", err)
+			logger.Error("Failed to delete transaction", "error", err, "transaction_id", id) // TODO: check error type to determine if transaction not found or unable to delete
 			http.Error(w, "Transaction not found or unable to delete", http.StatusNotFound)
 			return
 		}
@@ -353,7 +363,7 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 		// Send response with deleted transaction data
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			log.Printf("Error encoding transaction response: %v", err)
+			logger.Error("Failed to encode transaction response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -380,11 +390,11 @@ func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting splits for transaction ID: %d", transactionID)
+		logger.Debug("Getting splits for transaction", "transaction_id", transactionID)
 
 		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
 		if err != nil {
-			log.Printf("GetSplitsByTransactionID returned an error: %v", err)
+			logger.Error("Failed to get splits by transaction ID", "error", err, "transaction_id", transactionID) // TODO: check error type to determine if splits not found or unable to get splits
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -414,7 +424,7 @@ func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			log.Printf("Error encoding split responses: %v", err)
+			logger.Error("Failed to encode split responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -453,7 +463,7 @@ func createSplitNested(store db.Store) http.HandlerFunc {
 		// Override transaction_id from URL
 		createSplitReq.TransactionID = transactionID
 
-		log.Printf("Creating split for transaction: %d", createSplitReq.TransactionID)
+		logger.Debug("Creating split", "transaction_id", createSplitReq.TransactionID)
 
 		// Create split in database
 		split, err := store.CreateSplit(context.Background(), db.CreateSplitParams{
@@ -463,11 +473,11 @@ func createSplitNested(store db.Store) http.HandlerFunc {
 			SplitUser:     createSplitReq.SplitUser,
 		})
 		if err != nil {
-			log.Printf("CreateSplit returned an error: %v", err)
+			logger.Error("Failed to create split", "error", err) // TODO: check error type to determine if split not found or unable to create split
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created split with ID: %d", split.ID)
+		logger.Debug("Split created successfully", "split_id", split.ID, "transaction_id", createSplitReq.TransactionID)
 
 		// Convert to response format
 		splitResponse := models.SplitResponse{
@@ -485,7 +495,7 @@ func createSplitNested(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			log.Printf("Error encoding split response: %v", err)
+			logger.Error("Failed to encode split response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

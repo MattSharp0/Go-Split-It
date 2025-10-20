@@ -3,11 +3,11 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
 )
@@ -75,11 +75,11 @@ func listGroupMembersByGroupID(store db.Store) http.HandlerFunc {
 			listParams.Offset = int32(offset)
 		}
 
-		log.Printf("List GroupMembers for group %d, parameters: %v", groupID, listParams)
+		logger.Debug("Listing group members", "group_id", groupID, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		groupMembers, err := store.ListGroupMembersByGroupID(context.Background(), listParams)
 		if err != nil {
-			log.Printf("ListGroupMembersByGroupID returned an error: %v", err)
+			logger.Error("Failed to list group members", "error", err, "group_id", groupID) // TODO: check error type to determine if group members not found or unable to list group members
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -108,7 +108,7 @@ func listGroupMembersByGroupID(store db.Store) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(listGroupMemberResponse); err != nil {
-			log.Printf("Error encoding group member responses: %v", err)
+			logger.Error("Failed to encode group member responses", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -131,12 +131,12 @@ func getGroupMemberByID(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Getting group member with ID: %d", id)
+		logger.Debug("Getting group member by ID", "group_member_id", id)
 
 		// Get group member from database
 		groupMember, err := store.GetGroupMemberByID(context.Background(), id)
 		if err != nil {
-			log.Printf("GetGroupMemberByID (%v) returned an error: %v", id, err)
+			logger.Error("Failed to get group member by ID", "error", err, "group_member_id", id) // TODO: check error type to determine if group member not found or unable to get group member
 			http.Error(w, "Group member not found", http.StatusNotFound)
 			return
 		}
@@ -155,7 +155,7 @@ func getGroupMemberByID(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(groupMemberResponse); err != nil {
-			log.Printf("Error encoding group member response: %v", err)
+			logger.Error("Failed to encode group member response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -181,7 +181,7 @@ func createGroupMember(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Creating group member for group: %d, user: %v", createGroupMemberReq.GroupID, createGroupMemberReq.UserID)
+		logger.Debug("Creating group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID)
 
 		// Create group member in database
 		groupMember, err := store.CreateGroupMember(context.Background(), db.CreateGroupMemberParams{
@@ -189,11 +189,11 @@ func createGroupMember(store db.Store) http.HandlerFunc {
 			UserID:  createGroupMemberReq.UserID,
 		})
 		if err != nil {
-			log.Printf("CreateGroupMember returned an error: %v", err)
+			logger.Error("Failed to create group member", "error", err) // TODO: check error type to determine if group member not found or unable to create group member
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Created group member with ID: %d", groupMember.ID)
+		logger.Debug("Group member created successfully", "group_member_id", groupMember.ID, "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID)
 
 		// Convert to response format
 		groupMemberResponse := models.GroupMemberResponse{
@@ -208,7 +208,7 @@ func createGroupMember(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		if err := json.NewEncoder(w).Encode(groupMemberResponse); err != nil {
-			log.Printf("Error encoding group member response: %v", err)
+			logger.Error("Failed to encode group member response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -248,7 +248,7 @@ func updateGroupMember(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Updating group member with ID: %d", id)
+		logger.Debug("Updating group member", "group_member_id", id, "group_id", updateGroupMemberReq.GroupID, "user_id", updateGroupMemberReq.UserID)
 
 		// Update group member in database
 		groupMember, err := store.UpdateGroupMember(context.Background(), db.UpdateGroupMemberParams{
@@ -257,7 +257,7 @@ func updateGroupMember(store db.Store) http.HandlerFunc {
 			UserID:  updateGroupMemberReq.UserID,
 		})
 		if err != nil {
-			log.Printf("UpdateGroupMember returned an error: %v", err)
+			logger.Error("Failed to update group member", "error", err, "group_member_id", id) // TODO: check error type to determine if group member not found or unable to update group member
 			http.Error(w, "Group member not found or unable to update", http.StatusNotFound)
 			return
 		}
@@ -274,7 +274,7 @@ func updateGroupMember(store db.Store) http.HandlerFunc {
 		// Send response
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(groupMemberResponse); err != nil {
-			log.Printf("Error encoding group member response: %v", err)
+			logger.Error("Failed to encode group member response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -297,12 +297,12 @@ func deleteGroupMember(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		log.Printf("Deleting group member with ID: %d", id)
+		logger.Debug("Deleting group member", "group_member_id", id)
 
 		// Delete group member from database
 		groupMember, err := store.DeleteGroupMember(context.Background(), id)
 		if err != nil {
-			log.Printf("DeleteGroupMember returned an error: %v", err)
+			logger.Error("Failed to delete group member", "error", err, "group_member_id", id) // TODO: check error type to determine if group member not found or unable to delete group member
 			http.Error(w, "Group member not found or unable to delete", http.StatusNotFound)
 			return
 		}
@@ -319,7 +319,7 @@ func deleteGroupMember(store db.Store) http.HandlerFunc {
 		// Send response with deleted group member data
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(groupMemberResponse); err != nil {
-			log.Printf("Error encoding group member response: %v", err)
+			logger.Error("Failed to encode group member response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
