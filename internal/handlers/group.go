@@ -12,6 +12,7 @@ import (
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
+	"github.com/MattSharp0/transaction-split-go/internal/services"
 )
 
 func GroupRoutes(s *server.Server, q db.Store) *http.ServeMux {
@@ -673,7 +674,6 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 
 		logger.Debug("Getting balances for group", "group_id", groupID)
 
-		// Get all three types of balances
 		balances, err := store.GroupBalances(context.Background(), groupID)
 		if err != nil {
 			logger.Error("Failed to get group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if balances not found or unable to get balances
@@ -688,16 +688,25 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		// simplifiedBalances, err := services.SimplifyDebts(netBalances)
+		netBalancesForSimplification := make([]*models.NetBalance, len(netBalances))
+		for i, nb := range netBalances {
+			userID := int64(0)
+			if nb.UserID != nil {
+				userID = *nb.UserID
+			}
+			netBalancesForSimplification[i] = &models.NetBalance{
+				UserID:     userID,
+				NetBalance: nb.NetBalance,
+			}
+		}
 
-		// simplifiedBalances, err := store.GroupBalancesSimplified(context.Background(), groupID)
-		// if err != nil {
-		// 	logger.Error("Failed to get simplified group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if simplified balances not found or unable to get simplified balances
-		// 	http.Error(w, "An error has occurred", http.StatusInternalServerError)
-		// 	return
-		// }
+		simplifiedBalances, err := services.SimplifyDebts(netBalancesForSimplification)
+		if err != nil {
+			logger.Error("Failed to simplify debts", "error", err, "group_id", groupID)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
 
-		// Convert to response format
 		balanceResponses := make([]models.BalanceResponse, len(balances))
 		for i, b := range balances {
 			creditor := ""
@@ -708,50 +717,58 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 			if b.Debtor != nil {
 				debtor = *b.Debtor
 			}
+			creditorID := int64(0)
+			if b.CreditorID != nil {
+				creditorID = *b.CreditorID
+			}
+			debtorID := int64(0)
+			if b.DebtorID != nil {
+				debtorID = *b.DebtorID
+			}
 			balanceResponses[i] = models.BalanceResponse{
-				Creditor:  creditor,
-				Debtor:    debtor,
-				TotalOwed: b.TotalOwed,
+				CreditorID: creditorID,
+				Creditor:   creditor,
+				DebtorID:   debtorID,
+				Debtor:     debtor,
+				TotalOwed:  b.TotalOwed,
 			}
 		}
 
 		netBalanceResponses := make([]models.NetBalanceResponse, len(netBalances))
 		for i, nb := range netBalances {
+			userID := int64(0)
+			if nb.UserID != nil {
+				userID = *nb.UserID
+			}
+
 			memberName := ""
 			if nb.UserName != nil {
 				memberName = *nb.UserName
 			}
 			netBalanceResponses[i] = models.NetBalanceResponse{
+				UserID:     userID,
 				MemberName: memberName,
 				NetBalance: nb.NetBalance,
 			}
 		}
 
-		// simplifiedResponses := make([]models.BalanceResponse, len(simplifiedBalances))
-		// for i, sb := range simplifiedBalances {
-		// 	creditor := ""
-		// 	if sb.Creditor != nil {
-		// 		creditor = *sb.Creditor
-		// 	}
-		// 	debtor := ""
-		// 	if sb.Debtor != nil {
-		// 		debtor = *sb.Debtor
-		// 	}
-		// 	simplifiedResponses[i] = models.BalanceResponse{
-		// 		Creditor:  creditor,
-		// 		Debtor:    debtor,
-		// 		TotalOwed: sb.TotalOwed,
-		// 	}
-		// }
+		simplifiedResponses := make([]models.SimplifiedPaymentsResponse, len(simplifiedBalances))
+		for i, sb := range simplifiedBalances {
+			simplifiedResponses[i] = models.SimplifiedPaymentsResponse{
+				FromUserID: sb.FromUserID,
+				ToUserID:   sb.ToUserID,
+				Amount:     sb.Amount,
+			}
+		}
 
 		response := models.GroupBalancesResponse{
-			GroupID:     groupID,
-			Balances:    balanceResponses,
-			NetBalances: netBalanceResponses,
-			// SimplifiedOwes:  simplifiedResponses,
-			Count:    int32(len(balanceResponses)),
-			NetCount: int32(len(netBalanceResponses)),
-			// SimplifiedCount: int32(len(simplifiedResponses)),
+			GroupID:                 groupID,
+			Balances:                balanceResponses,
+			NetBalances:             netBalanceResponses,
+			SimplifiedPayments:      simplifiedResponses,
+			Count:                   int32(len(balanceResponses)),
+			NetCount:                int32(len(netBalanceResponses)),
+			SimplifiedPaymentsCount: int32(len(simplifiedResponses)),
 		}
 
 		w.Header().Set("Content-Type", "application/json")

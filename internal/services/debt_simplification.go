@@ -23,7 +23,7 @@ func splitNetBalances(balances []*models.NetBalance) ([]*models.NetBalance, []*m
 			creditorNetBalances = append(creditorNetBalances, balance)
 		}
 	}
-	logger.Debug("splitNetBalances returned: %s, %v")
+	logger.Debug("splitNetBalances returned", "debtors", len(debtorNetBalances), "creditors", len(creditorNetBalances))
 	return debtorNetBalances, creditorNetBalances
 }
 
@@ -34,13 +34,13 @@ func SimplifyDebts(balances []*models.NetBalance) ([]models.BalancePayment, erro
 		return nil, errors.New("Net Balances do not sum to zero")
 	}
 
-	creditorNetBalances, debtorNetBalances := splitNetBalances(balances)
+	debtorNetBalances, creditorNetBalances := splitNetBalances(balances)
 
-	creditorHeap := (*heaps.MinNetBalanceHeap)(&creditorNetBalances)
 	debtorHeap := (*heaps.MaxNetBalanceHeap)(&debtorNetBalances)
+	creditorHeap := (*heaps.MinNetBalanceHeap)(&creditorNetBalances)
 
-	heap.Init(creditorHeap)
 	heap.Init(debtorHeap)
+	heap.Init(creditorHeap)
 
 	payments := make([]models.BalancePayment, debtorHeap.Len())
 	var paymentCount int
@@ -57,17 +57,19 @@ func SimplifyDebts(balances []*models.NetBalance) ([]models.BalancePayment, erro
 		}
 		if delta.IsNegative() {
 			creditorHeap.Push(&models.NetBalance{UserID: creditor.UserID, NetBalance: delta})
-			pa = delta.Abs()
+			pa = decimal.Min(creditor.NetBalance.Abs(), debtor.NetBalance)
 		}
 		if delta.IsPositive() {
 			debtorHeap.Push(&models.NetBalance{UserID: debtor.UserID, NetBalance: delta})
-			pa = delta
+			pa = decimal.Min(creditor.NetBalance.Abs(), debtor.NetBalance)
 		}
+
 		pmt := models.BalancePayment{FromUserID: debtor.UserID, ToUserID: creditor.UserID, Amount: pa}
 		payments = append(payments, pmt)
 		paymentCount++
 
 	}
+	logger.Debug("Simplified Payments count", "payment count", paymentCount)
 
 	payments = payments[paymentCount:]
 	return payments, nil

@@ -29,12 +29,18 @@ type NetBalanceResponse struct {
 	NetBalance decimal.Decimal `json:"net_balance"`
 }
 
+type SimplifiedPaymentsResponse struct {
+	FromUserID int64           `json:"from_user_id"`
+	ToUserID   int64           `json:"to_user_id"`
+	Amount     decimal.Decimal `json:"amount"`
+}
+
 type GroupBalancesResponse struct {
-	GroupID         int64                `json:"group_id"`
-	Balances        []BalanceResponse    `json:"balances"`
-	NetBalances     []NetBalanceResponse `json:"net_balances"`
-	SimplifiedOwes  []BalanceResponse    `json:"simplified_owes"`
-	Count           int32                `json:"count"`
-	NetCount        int32                `json:"net_count"`
-	SimplifiedCount int32                `json:"simplified_count"`
+	GroupID                 int64                        `json:"group_id"`
+	Balances                []BalanceResponse            `json:"balances"`
+	NetBalances             []NetBalanceResponse         `json:"net_balances"`
+	SimplifiedPayments      []SimplifiedPaymentsResponse `json:"simplified_payments"`
+	Count                   int32                        `json:"count"`
+	NetCount                int32                        `json:"net_count"`
+	SimplifiedPaymentsCount int32                        `json:"simplified_payments_count"`
 }

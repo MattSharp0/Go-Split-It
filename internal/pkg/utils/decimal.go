@@ -15,7 +15,7 @@ func SumNetBalances(balances ...[]*models.NetBalance) decimal.Decimal {
 			sum = sum.Add(b.NetBalance)
 		}
 	}
-	logger.Debug("SumNetBalance returned %d", sum.IntPart())
+	logger.Debug("SumNetBalance returned", "sum", sum.IntPart())
 	return sum
 
 }
