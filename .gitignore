@@ -1,5 +1,10 @@
 *.env
+
+# Notes / test files
 *.xlsx
 *.csv
 ROUTE_ORDERING.md
 SPLIT_API_GUIDE.md
+
+# VS Code
+.vscode/settings.json
