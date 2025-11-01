@@ -22,6 +22,7 @@ type Querier interface {
 	DeleteTransactionSplits(ctx context.Context, transactionID int64) ([]Split, error)
 	DeleteUser(ctx context.Context, id int64) (User, error)
 	GetGroupByID(ctx context.Context, id int64) (Group, error)
+	GetGroupByIDForUpdate(ctx context.Context, id int64) (Group, error)
 	GetGroupMemberByID(ctx context.Context, id int64) (GetGroupMemberByIDRow, error)
 	GetSplitByID(ctx context.Context, id int64) (Split, error)
 	GetSplitByIDForUpdate(ctx context.Context, id int64) (Split, error)

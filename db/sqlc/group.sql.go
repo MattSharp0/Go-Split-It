@@ -56,6 +56,22 @@ func (q *Queries) GetGroupByID(ctx context.Context, id int64) (Group, error) {
 	return i, err
 }
 
+const getGroupByIDForUpdate = `-- name: GetGroupByIDForUpdate :one
+SELECT 
+  id, name
+FROM "groups"
+WHERE id = $1 
+LIMIT 1
+FOR UPDATE
+`
+
+func (q *Queries) GetGroupByIDForUpdate(ctx context.Context, id int64) (Group, error) {
+	row := q.db.QueryRow(ctx, getGroupByIDForUpdate, id)
+	var i Group
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const listGroups = `-- name: ListGroups :many
 SELECT 
   id, name

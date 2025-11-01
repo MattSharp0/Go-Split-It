@@ -16,6 +16,14 @@ SELECT
 FROM "groups"
 WHERE id = $1 LIMIT 1;  
 
+-- name: GetGroupByIDForUpdate :one
+SELECT 
+  *
+FROM "groups"
+WHERE id = $1 
+LIMIT 1
+FOR UPDATE;
+
 -- name: ListGroups :many
 SELECT 
   *
