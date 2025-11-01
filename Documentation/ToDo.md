@@ -4,6 +4,11 @@
     - ~~Date filters should be optional for transactions by group & user~~
 - ~~Troubleshoot balances endpoint reports missing user data~~
 - ~~Add nested route under splits/transaction/{tx_id}/batch to create splits for a transaction without needing to pass tx_id in body.~~
+- ~~Implement Simplified debts logic into balances endpoint~~
+- Implement User level (group agnostic) balance and debts reporting logic
+- Refactor API handlers to DRY?
+- Update API route docs
+- Update error messaging when DB does not return result (404 or 500)
 - Create transaction to add multiple group members at once
     - Link group member to user
 - Update IDs to use designated preface
@@ -13,7 +18,7 @@
 - Build out testing
     - Testify
 - Add user authentication & scope
-- Add 'created by' timestamp to transactions, splits, and groups
+    - email 'magic link'?
 - Add config file for setup
 - Add start and end date for group members
     - allows for transactions to apply to only those active at tx date
