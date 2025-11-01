@@ -2,15 +2,16 @@
 
 - Review endpoints and filters
     - ~~Date filters should be optional for transactions by group & user~~
-- Troubleshoot balances endpoint reports missing user data
+- ~~Troubleshoot balances endpoint reports missing user data~~
+- ~~Add nested route under splits/transaction/{tx_id}/batch to create splits for a transaction without needing to pass tx_id in body.~~
+- Create transaction to add multiple group members at once
+    - Link group member to user
+- Update IDs to use designated preface
 - ~~Generate transaction for adding all splits for a transaction at once~~
     - Add function to calculte % or $ amount if missing from API request 
-- Implement logging middleware for all endpoints
-    - Debug for requests and server connection
-    - Info for startup and shutdown
-    - Configurable levels for
+- ~~Implement logging middleware for all endpoints~~
 - Build out testing
-    - Warning / Fatal for errors
+    - Testify
 - Add user authentication & scope
 - Add 'created by' timestamp to transactions, splits, and groups
 - Add config file for setup
