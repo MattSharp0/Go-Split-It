@@ -688,12 +688,14 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		simplifiedBalances, err := store.GroupBalancesSimplified(context.Background(), groupID)
-		if err != nil {
-			logger.Error("Failed to get simplified group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if simplified balances not found or unable to get simplified balances
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
-			return
-		}
+		// simplifiedBalances, err := services.SimplifyDebts(netBalances)
+
+		// simplifiedBalances, err := store.GroupBalancesSimplified(context.Background(), groupID)
+		// if err != nil {
+		// 	logger.Error("Failed to get simplified group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if simplified balances not found or unable to get simplified balances
+		// 	http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		// 	return
+		// }
 
 		// Convert to response format
 		balanceResponses := make([]models.BalanceResponse, len(balances))
@@ -716,8 +718,8 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 		netBalanceResponses := make([]models.NetBalanceResponse, len(netBalances))
 		for i, nb := range netBalances {
 			memberName := ""
-			if nb.MemberName != nil {
-				memberName = *nb.MemberName
+			if nb.UserName != nil {
+				memberName = *nb.UserName
 			}
 			netBalanceResponses[i] = models.NetBalanceResponse{
 				MemberName: memberName,
@@ -725,31 +727,31 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 			}
 		}
 
-		simplifiedResponses := make([]models.BalanceResponse, len(simplifiedBalances))
-		for i, sb := range simplifiedBalances {
-			creditor := ""
-			if sb.Creditor != nil {
-				creditor = *sb.Creditor
-			}
-			debtor := ""
-			if sb.Debtor != nil {
-				debtor = *sb.Debtor
-			}
-			simplifiedResponses[i] = models.BalanceResponse{
-				Creditor:  creditor,
-				Debtor:    debtor,
-				TotalOwed: sb.TotalOwed,
-			}
-		}
+		// simplifiedResponses := make([]models.BalanceResponse, len(simplifiedBalances))
+		// for i, sb := range simplifiedBalances {
+		// 	creditor := ""
+		// 	if sb.Creditor != nil {
+		// 		creditor = *sb.Creditor
+		// 	}
+		// 	debtor := ""
+		// 	if sb.Debtor != nil {
+		// 		debtor = *sb.Debtor
+		// 	}
+		// 	simplifiedResponses[i] = models.BalanceResponse{
+		// 		Creditor:  creditor,
+		// 		Debtor:    debtor,
+		// 		TotalOwed: sb.TotalOwed,
+		// 	}
+		// }
 
 		response := models.GroupBalancesResponse{
-			GroupID:         groupID,
-			Balances:        balanceResponses,
-			NetBalances:     netBalanceResponses,
-			SimplifiedOwes:  simplifiedResponses,
-			Count:           int32(len(balanceResponses)),
-			NetCount:        int32(len(netBalanceResponses)),
-			SimplifiedCount: int32(len(simplifiedResponses)),
+			GroupID:     groupID,
+			Balances:    balanceResponses,
+			NetBalances: netBalanceResponses,
+			// SimplifiedOwes:  simplifiedResponses,
+			Count:    int32(len(balanceResponses)),
+			NetCount: int32(len(netBalanceResponses)),
+			// SimplifiedCount: int32(len(simplifiedResponses)),
 		}
 
 		w.Header().Set("Content-Type", "application/json")
