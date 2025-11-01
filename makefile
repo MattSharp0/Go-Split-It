@@ -24,10 +24,10 @@ dropdb:
 	docker exec -it postgres17a dropdb $(DATABASE_NAME)
 
 migrateup:
-	migrate -path db/migrations -database "$(DATABASE_URL)" -verbose up
+	migrate -path db/migrations -database "$(DATABASE_URL)" -verbose up 1
 
 migratedown:
-	migrate -path db/migrations -database "$(DATABASE_URL)" -verbose down
+	migrate -path db/migrations -database "$(DATABASE_URL)" -verbose down 1
 
 sqlc:
 	sqlc generate

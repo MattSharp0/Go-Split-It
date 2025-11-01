@@ -16,23 +16,16 @@ type Group struct {
 }
 
 type GroupBalance struct {
-	GroupID   int64  `json:"group_id"`
-	Creditor  int64  `json:"creditor"`
-	Debtor    *int64 `json:"debtor"`
-	TotalOwed int64  `json:"total_owed"`
+	GroupID   int64           `json:"group_id"`
+	Creditor  int64           `json:"creditor"`
+	Debtor    *int64          `json:"debtor"`
+	TotalOwed decimal.Decimal `json:"total_owed"`
 }
 
 type GroupBalancesNet struct {
-	GroupID    int64  `json:"group_id"`
-	User       *int64 `json:"user"`
-	NetBalance int32  `json:"net_balance"`
-}
-
-type GroupBalancesSimple struct {
-	GroupID   int64  `json:"group_id"`
-	Creditor  int64  `json:"creditor"`
-	Debtor    *int64 `json:"debtor"`
-	TotalOwed int64  `json:"total_owed"`
+	GroupID    int64           `json:"group_id"`
+	User       *int64          `json:"user"`
+	NetBalance decimal.Decimal `json:"net_balance"`
 }
 
 type GroupMember struct {

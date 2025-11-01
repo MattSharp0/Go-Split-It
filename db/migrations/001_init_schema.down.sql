@@ -1,6 +1,6 @@
 DROP TRIGGER IF EXISTS set_modified_at_users on "users";
 DROP TRIGGER IF EXISTS set_modified_at_transactions on "transactions";
-DROP TRIGGER IF EXISTS set_modified_at_splits on "splits"
+DROP TRIGGER IF EXISTS set_modified_at_splits on "splits";
 DROP TRIGGER IF EXISTS set_member_name_on_user_delete on "group_members";
 
 DROP FUNCTION IF EXISTS update_modified_at();

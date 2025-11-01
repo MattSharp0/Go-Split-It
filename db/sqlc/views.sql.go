@@ -7,13 +7,17 @@ package db
 
 import (
 	"context"
+
+	"github.com/shopspring/decimal"
 )
 
 const groupBalances = `-- name: GroupBalances :many
 SELECT 
+    c.user_id as creditor_id, 
     c.member_name as creditor, 
+    d.user_id as debtor_id,
     d.member_name as debtor,
-    gb.total_owed
+    gb.total_owed::numeric(10,2) as total_owed -- sum returns unconstrained numeric
 FROM group_balances gb
 JOIN group_members c on c.id = gb.creditor
 JOIN group_members d on d.id = gb.debtor
@@ -22,9 +26,11 @@ ORDER BY c.member_name, d.member_name
 `
 
 type GroupBalancesRow struct {
-	Creditor  *string `json:"creditor"`
-	Debtor    *string `json:"debtor"`
-	TotalOwed int64   `json:"total_owed"`
+	CreditorID *int64          `json:"creditor_id"`
+	Creditor   *string         `json:"creditor"`
+	DebtorID   *int64          `json:"debtor_id"`
+	Debtor     *string         `json:"debtor"`
+	TotalOwed  decimal.Decimal `json:"total_owed"`
 }
 
 func (q *Queries) GroupBalances(ctx context.Context, groupID int64) ([]GroupBalancesRow, error) {
@@ -36,7 +42,13 @@ func (q *Queries) GroupBalances(ctx context.Context, groupID int64) ([]GroupBala
 	items := []GroupBalancesRow{}
 	for rows.Next() {
 		var i GroupBalancesRow
-		if err := rows.Scan(&i.Creditor, &i.Debtor, &i.TotalOwed); err != nil {
+		if err := rows.Scan(
+			&i.CreditorID,
+			&i.Creditor,
+			&i.DebtorID,
+			&i.Debtor,
+			&i.TotalOwed,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -49,8 +61,9 @@ func (q *Queries) GroupBalances(ctx context.Context, groupID int64) ([]GroupBala
 
 const groupBalancesNet = `-- name: GroupBalancesNet :many
 SELECT
-    gm.member_name,
-    gbn.net_balance
+    gm.user_id as user_id,
+    gm.member_name as user_name,
+    gbn.net_balance::numeric(10,2) as net_balance -- sum returns unconstrained numeric
 FROM group_balances_net gbn
 JOIN group_members gm on gm.id = gbn.user
 WHERE gbn.group_id = $1
@@ -58,8 +71,9 @@ ORDER BY gm.member_name
 `
 
 type GroupBalancesNetRow struct {
-	MemberName *string `json:"member_name"`
-	NetBalance int32   `json:"net_balance"`
+	UserID     *int64          `json:"user_id"`
+	UserName   *string         `json:"user_name"`
+	NetBalance decimal.Decimal `json:"net_balance"`
 }
 
 func (q *Queries) GroupBalancesNet(ctx context.Context, groupID int64) ([]GroupBalancesNetRow, error) {
@@ -71,45 +85,7 @@ func (q *Queries) GroupBalancesNet(ctx context.Context, groupID int64) ([]GroupB
 	items := []GroupBalancesNetRow{}
 	for rows.Next() {
 		var i GroupBalancesNetRow
-		if err := rows.Scan(&i.MemberName, &i.NetBalance); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const groupBalancesSimplified = `-- name: GroupBalancesSimplified :many
-SELECT 
-    c.member_name as creditor,
-    d.member_name as debtor, 
-    gbs.total_owed
-FROM group_balances_simple gbs
-JOIN group_members c on c.id = gbs.creditor
-JOIN group_members d on d.id = gbs.debtor
-WHERE gbs.group_id = $1
-ORDER BY c.member_name, d.member_name
-`
-
-type GroupBalancesSimplifiedRow struct {
-	Creditor  *string `json:"creditor"`
-	Debtor    *string `json:"debtor"`
-	TotalOwed int64   `json:"total_owed"`
-}
-
-func (q *Queries) GroupBalancesSimplified(ctx context.Context, groupID int64) ([]GroupBalancesSimplifiedRow, error) {
-	rows, err := q.db.Query(ctx, groupBalancesSimplified, groupID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GroupBalancesSimplifiedRow{}
-	for rows.Next() {
-		var i GroupBalancesSimplifiedRow
-		if err := rows.Scan(&i.Creditor, &i.Debtor, &i.TotalOwed); err != nil {
+		if err := rows.Scan(&i.UserID, &i.UserName, &i.NetBalance); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
