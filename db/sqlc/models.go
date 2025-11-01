@@ -24,7 +24,7 @@ type GroupBalance struct {
 
 type GroupBalancesNet struct {
 	GroupID    int64           `json:"group_id"`
-	User       *int64          `json:"user"`
+	UserID     int64           `json:"user_id"`
 	NetBalance decimal.Decimal `json:"net_balance"`
 }
 

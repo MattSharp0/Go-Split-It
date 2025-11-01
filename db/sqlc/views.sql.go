@@ -65,7 +65,7 @@ SELECT
     gm.member_name as user_name,
     gbn.net_balance::numeric(10,2) as net_balance -- sum returns unconstrained numeric
 FROM group_balances_net gbn
-JOIN group_members gm on gm.id = gbn.user
+JOIN group_members gm on gm.id = gbn.user_id
 WHERE gbn.group_id = $1
 ORDER BY gm.member_name
 `
