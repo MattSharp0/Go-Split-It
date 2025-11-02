@@ -28,3 +28,35 @@ type UpdateGroupMemberRequest struct {
 	GroupID int64  `json:"group_id"`
 	UserID  *int64 `json:"user_id"`
 }
+
+// Batch operation models
+type BatchCreateGroupMemberRequest struct {
+	Members []BatchGroupMemberItem `json:"members"`
+}
+
+type BatchGroupMemberItem struct {
+	UserID *int64 `json:"user_id"`
+}
+
+type BatchUpdateGroupMemberRequest struct {
+	Members []BatchGroupMemberItem `json:"members"`
+}
+
+type BatchCreateGroupMemberResponse struct {
+	Group        GroupResponse         `json:"group"`
+	GroupMembers []GroupMemberResponse `json:"group_members"`
+	Count        int32                 `json:"count"`
+}
+
+type BatchUpdateGroupMemberResponse struct {
+	Group          GroupResponse         `json:"group"`
+	DeletedMembers []GroupMemberResponse `json:"deleted_members"`
+	NewMembers     []GroupMemberResponse `json:"new_members"`
+	DeletedCount   int32                 `json:"deleted_count"`
+	NewCount       int32                 `json:"new_count"`
+}
+
+type BatchDeleteGroupMemberResponse struct {
+	GroupID int64  `json:"group_id"`
+	Message string `json:"message"`
+}

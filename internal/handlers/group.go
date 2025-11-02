@@ -18,6 +18,12 @@ import (
 func GroupRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux := http.NewServeMux()
 
+	// Batch Path Handlers
+	mux.HandleFunc("POST /{group_id}/members/batch", createGroupMembersForGroup(q))   // POST: Create group members for group
+	mux.HandleFunc("PATCH /{group_id}/members/batch", updateGroupMembersForGroup(q))  // PATCH: Update group members for group
+	mux.HandleFunc("PUT /{group_id}/members/batch", updateGroupMembersForGroup(q))    // PUT: Update group members for group
+	mux.HandleFunc("DELETE /{group_id}/members/batch", deleteGroupMembersForGroup(q)) // DELETE: Delete group members for group
+
 	// Root path handlers
 	mux.HandleFunc("POST /", createGroup(q)) // POST: Create group
 	mux.HandleFunc("GET /", listGroups(q))   // GET: List groups
@@ -774,6 +780,242 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			logger.Error("Failed to encode balance response", "error", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Batch operation handlers
+
+// Create group members for group (batch)
+// POST /groups/{group_id}/members/batch
+func createGroupMembersForGroup(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {group_id} from path parameter
+		groupIDStr := r.PathValue("group_id")
+		if groupIDStr == "" {
+			http.Error(w, "Group ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Decode request body
+		decoder := json.NewDecoder(r.Body)
+		defer r.Body.Close()
+
+		var batchReq models.BatchCreateGroupMemberRequest
+		err = decoder.Decode(&batchReq)
+		if err != nil {
+			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Validate input
+		if len(batchReq.Members) == 0 {
+			http.Error(w, "At least one member is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert request to transaction params
+		groupMembers := make([]db.CreateGroupMemberParams, len(batchReq.Members))
+		for i, member := range batchReq.Members {
+			groupMembers[i] = db.CreateGroupMemberParams{
+				GroupID: groupID,
+				UserID:  member.UserID,
+			}
+		}
+
+		logger.Debug("Creating group members in batch", "group_id", groupID, "count", len(groupMembers))
+
+		// Create group members using transaction
+		result, err := store.CreateGroupMembersTx(context.Background(), db.CreateGroupMemberTxParams{
+			GroupID:      groupID,
+			GroupMembers: groupMembers,
+		})
+		if err != nil {
+			logger.Error("Failed to create group members", "error", err, "group_id", groupID)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+
+		logger.Debug("Group members created successfully", "group_id", groupID, "count", len(result.GroupMembers))
+
+		// Convert to response format
+		groupMemberResponses := make([]models.GroupMemberResponse, len(result.GroupMembers))
+		for i, gm := range result.GroupMembers {
+			groupMemberResponses[i] = models.GroupMemberResponse{
+				ID:         gm.ID,
+				GroupID:    gm.GroupID,
+				MemberName: gm.MemberName,
+				UserID:     gm.UserID,
+				CreatedAt:  gm.CreatedAt,
+			}
+		}
+
+		response := models.BatchCreateGroupMemberResponse{
+			Group: models.GroupResponse{
+				ID:   result.Group.ID,
+				Name: result.Group.Name,
+			},
+			GroupMembers: groupMemberResponses,
+			Count:        int32(len(groupMemberResponses)),
+		}
+
+		// Send response with 201 Created status
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			logger.Error("Failed to encode batch create response", "error", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Update group members for group (batch) - replaces all members
+// PUT/PATCH /groups/{group_id}/members/batch
+func updateGroupMembersForGroup(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {group_id} from path parameter
+		groupIDStr := r.PathValue("group_id")
+		if groupIDStr == "" {
+			http.Error(w, "Group ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+			return
+		}
+
+		// Decode request body
+		decoder := json.NewDecoder(r.Body)
+		defer r.Body.Close()
+
+		var batchReq models.BatchUpdateGroupMemberRequest
+		err = decoder.Decode(&batchReq)
+		if err != nil {
+			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		// Convert request to transaction params
+		groupMembers := make([]db.CreateGroupMemberParams, len(batchReq.Members))
+		for i, member := range batchReq.Members {
+			groupMembers[i] = db.CreateGroupMemberParams{
+				GroupID: groupID,
+				UserID:  member.UserID,
+			}
+		}
+
+		logger.Debug("Updating group members in batch", "group_id", groupID, "new_count", len(groupMembers))
+
+		// Update group members using transaction (replaces all)
+		result, err := store.UpdateGroupMembersTx(context.Background(), db.UpdateGroupMemberTxParams{
+			GroupID:      groupID,
+			GroupMembers: groupMembers,
+		})
+		if err != nil {
+			logger.Error("Failed to update group members", "error", err, "group_id", groupID)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+
+		logger.Debug("Group members updated successfully", "group_id", groupID, "deleted_count", len(result.DeletedMembers), "new_count", len(result.NewMembers))
+
+		// Convert deleted members to response format
+		deletedResponses := make([]models.GroupMemberResponse, len(result.DeletedMembers))
+		for i, gm := range result.DeletedMembers {
+			deletedResponses[i] = models.GroupMemberResponse{
+				ID:         gm.ID,
+				GroupID:    gm.GroupID,
+				MemberName: gm.MemberName,
+				UserID:     gm.UserID,
+				CreatedAt:  gm.CreatedAt,
+			}
+		}
+
+		// Convert new members to response format
+		newResponses := make([]models.GroupMemberResponse, len(result.NewMembers))
+		for i, gm := range result.NewMembers {
+			newResponses[i] = models.GroupMemberResponse{
+				ID:         gm.ID,
+				GroupID:    gm.GroupID,
+				MemberName: gm.MemberName,
+				UserID:     gm.UserID,
+				CreatedAt:  gm.CreatedAt,
+			}
+		}
+
+		response := models.BatchUpdateGroupMemberResponse{
+			Group: models.GroupResponse{
+				ID:   result.Group.ID,
+				Name: result.Group.Name,
+			},
+			DeletedMembers: deletedResponses,
+			NewMembers:     newResponses,
+			DeletedCount:   int32(len(deletedResponses)),
+			NewCount:       int32(len(newResponses)),
+		}
+
+		// Send response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			logger.Error("Failed to encode batch update response", "error", err)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Delete group members for group (batch) - deletes all members
+// DELETE /groups/{group_id}/members/batch
+func deleteGroupMembersForGroup(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {group_id} from path parameter
+		groupIDStr := r.PathValue("group_id")
+		if groupIDStr == "" {
+			http.Error(w, "Group ID is required", http.StatusBadRequest)
+			return
+		}
+
+		// Convert string ID to int64
+		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+			return
+		}
+
+		logger.Debug("Deleting group members in batch", "group_id", groupID)
+
+		// Delete all group members using transaction
+		err = store.DeleteGroupMembersTx(context.Background(), groupID)
+		if err != nil {
+			logger.Error("Failed to delete group members", "error", err, "group_id", groupID)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+
+		logger.Debug("Group members deleted successfully", "group_id", groupID)
+
+		response := models.BatchDeleteGroupMemberResponse{
+			GroupID: groupID,
+			Message: "All group members deleted successfully",
+		}
+
+		// Send response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			logger.Error("Failed to encode batch delete response", "error", err)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
