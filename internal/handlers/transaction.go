@@ -69,9 +69,7 @@ func listTransactions(store db.Store) http.HandlerFunc {
 		)
 
 		transactions, err := store.ListTransactions(context.Background(), listTransactionParams)
-		if err != nil {
-			logger.Error("Failed to list transactions", "error", err) // TODO: check error type to determine if transactions not found or unable to list transactions
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to list transactions", "limit", listTransactionParams.Limit, "offset", listTransactionParams.Offset) {
 			return
 		}
 
@@ -129,9 +127,7 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 
 		// Get transaction from database
 		transaction, err := store.GetTransactionByID(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to get transaction by ID", "error", err, "transaction_id", id) // TODO: check error type to determine if transaction not found or unable to get transaction
-			http.Error(w, "Transaction not found", http.StatusNotFound)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", id) {
 			return
 		}
 
@@ -201,9 +197,7 @@ func createTransaction(store db.Store) http.HandlerFunc {
 			Note:            createTransactionReq.Note,
 			ByUser:          createTransactionReq.ByUser,
 		})
-		if err != nil {
-			logger.Error("Failed to create transaction", "error", err) // TODO: check error type to determine if transaction not found or unable to create transaction
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create transaction", "group_id", createTransactionReq.GroupID) {
 			return
 		}
 		logger.Debug("Transaction created successfully",
@@ -290,9 +284,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 			Note:            updateTransactionReq.Note,
 			ByUser:          updateTransactionReq.ByUser,
 		})
-		if err != nil {
-			logger.Error("Failed to update transaction", "error", err, "transaction_id", id) // TODO: check error type to determine if transaction not found or unable to update
-			http.Error(w, "Transaction not found or unable to update", http.StatusNotFound)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to update transaction", "transaction_id", id) {
 			return
 		}
 
@@ -340,9 +332,7 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 
 		// Delete transaction from database
 		transaction, err := store.DeleteTransaction(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to delete transaction", "error", err, "transaction_id", id) // TODO: check error type to determine if transaction not found or unable to delete
-			http.Error(w, "Transaction not found or unable to delete", http.StatusNotFound)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to delete transaction", "transaction_id", id) {
 			return
 		}
 
@@ -393,9 +383,7 @@ func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting splits for transaction", "transaction_id", transactionID)
 
 		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
-		if err != nil {
-			logger.Error("Failed to get splits by transaction ID", "error", err, "transaction_id", transactionID) // TODO: check error type to determine if splits not found or unable to get splits
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by transaction ID", "transaction_id", transactionID) {
 			return
 		}
 
@@ -472,9 +460,7 @@ func createSplitNested(store db.Store) http.HandlerFunc {
 			SplitAmount:   createSplitReq.SplitAmount,
 			SplitUser:     createSplitReq.SplitUser,
 		})
-		if err != nil {
-			logger.Error("Failed to create split", "error", err) // TODO: check error type to determine if split not found or unable to create split
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create split", "transaction_id", createSplitReq.TransactionID) {
 			return
 		}
 		logger.Debug("Split created successfully", "split_id", split.ID, "transaction_id", createSplitReq.TransactionID)

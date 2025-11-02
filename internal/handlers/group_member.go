@@ -78,9 +78,7 @@ func listGroupMembersByGroupID(store db.Store) http.HandlerFunc {
 		logger.Debug("Listing group members", "group_id", groupID, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		groupMembers, err := store.ListGroupMembersByGroupID(context.Background(), listParams)
-		if err != nil {
-			logger.Error("Failed to list group members", "error", err, "group_id", groupID) // TODO: check error type to determine if group members not found or unable to list group members
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to list group members", "group_id", groupID) {
 			return
 		}
 
@@ -135,9 +133,7 @@ func getGroupMemberByID(store db.Store) http.HandlerFunc {
 
 		// Get group member from database
 		groupMember, err := store.GetGroupMemberByID(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to get group member by ID", "error", err, "group_member_id", id) // TODO: check error type to determine if group member not found or unable to get group member
-			http.Error(w, "Group member not found", http.StatusNotFound)
+		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to get group member by ID", "group_member_id", id) {
 			return
 		}
 
@@ -188,9 +184,7 @@ func createGroupMember(store db.Store) http.HandlerFunc {
 			GroupID: createGroupMemberReq.GroupID,
 			UserID:  createGroupMemberReq.UserID,
 		})
-		if err != nil {
-			logger.Error("Failed to create group member", "error", err) // TODO: check error type to determine if group member not found or unable to create group member
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID) {
 			return
 		}
 		logger.Debug("Group member created successfully", "group_member_id", groupMember.ID, "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID)
@@ -256,9 +250,7 @@ func updateGroupMember(store db.Store) http.HandlerFunc {
 			GroupID: updateGroupMemberReq.GroupID,
 			UserID:  updateGroupMemberReq.UserID,
 		})
-		if err != nil {
-			logger.Error("Failed to update group member", "error", err, "group_member_id", id) // TODO: check error type to determine if group member not found or unable to update group member
-			http.Error(w, "Group member not found or unable to update", http.StatusNotFound)
+		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to update group member", "group_member_id", id) {
 			return
 		}
 
@@ -301,9 +293,7 @@ func deleteGroupMember(store db.Store) http.HandlerFunc {
 
 		// Delete group member from database
 		groupMember, err := store.DeleteGroupMember(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to delete group member", "error", err, "group_member_id", id) // TODO: check error type to determine if group member not found or unable to delete group member
-			http.Error(w, "Group member not found or unable to delete", http.StatusNotFound)
+		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to delete group member", "group_member_id", id) {
 			return
 		}
 

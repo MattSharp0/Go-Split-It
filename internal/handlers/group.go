@@ -79,9 +79,7 @@ func listGroups(store db.Store) http.HandlerFunc {
 		logger.Debug("Listing groups", "limit", listGroupParams.Limit, "offset", listGroupParams.Offset)
 
 		groups, err := store.ListGroups(context.Background(), listGroupParams)
-		if err != nil {
-			logger.Error("Failed to list groups", "error", err) // TODO: check error type to determine if groups not found or unable to list groups
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to list groups", "limit", listGroupParams.Limit, "offset", listGroupParams.Offset) {
 			return
 		}
 
@@ -131,9 +129,7 @@ func getGroupByID(store db.Store) http.HandlerFunc {
 
 		// Get group from database
 		group, err := store.GetGroupByID(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to get group by ID", "error", err, "group_id", id) // TODO: check error type to determine if group not found or unable to get group
-			http.Error(w, "Group not found", http.StatusNotFound)
+		if HandleDBError(w, err, "Group not found", "An error has occurred", "Failed to get group by ID", "group_id", id) {
 			return
 		}
 
@@ -176,9 +172,7 @@ func createGroup(store db.Store) http.HandlerFunc {
 
 		// Create group in database
 		group, err := store.CreateGroup(context.Background(), createGroupReq.Name)
-		if err != nil {
-			logger.Error("Failed to create group", "error", err) // TODO: check error type to determine if group not found or unable to create group
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create group", "name", createGroupReq.Name) {
 			return
 		}
 		logger.Debug("Group created successfully", slog.Int64("group_id", group.ID), slog.String("name", group.Name))
@@ -240,9 +234,7 @@ func updateGroup(store db.Store) http.HandlerFunc {
 			ID:   id,
 			Name: updateGroupReq.Name,
 		})
-		if err != nil {
-			logger.Error("Failed to update group", "error", err, "group_id", id) // TODO: check error type to determine if group not found or unable to update
-			http.Error(w, "Group not found or unable to update", http.StatusNotFound)
+		if HandleDBError(w, err, "Group not found", "An error has occurred", "Failed to update group", "group_id", id) {
 			return
 		}
 
@@ -282,9 +274,7 @@ func deleteGroup(store db.Store) http.HandlerFunc {
 
 		// Delete group from database
 		group, err := store.DeleteGroup(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to delete group", "error", err, "group_id", id) // TODO: check error type to determine if group not found or unable to delete
-			http.Error(w, "Group not found or unable to delete", http.StatusNotFound)
+		if HandleDBError(w, err, "Group not found", "An error has occurred", "Failed to delete group", "group_id", id) {
 			return
 		}
 
@@ -356,9 +346,7 @@ func listGroupMembers(store db.Store) http.HandlerFunc {
 		logger.Debug("Listing group members", "group_id", groupID, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		groupMembers, err := store.ListGroupMembersByGroupID(context.Background(), listParams)
-		if err != nil {
-			logger.Error("Failed to list group members", "error", err, "group_id", groupID) // TODO: check error type to determine if group members not found or unable to list group members
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to list group members", "group_id", groupID) {
 			return
 		}
 
@@ -432,9 +420,7 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 			GroupID: createGroupMemberReq.GroupID,
 			UserID:  createGroupMemberReq.UserID,
 		})
-		if err != nil {
-			logger.Error("Failed to create group member", "error", err) // TODO: check error type to determine if group member not found or unable to create group member
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID) {
 			return
 		}
 		logger.Debug("Group member created successfully", "group_member_id", groupMember.ID)
@@ -534,9 +520,7 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 		logger.Debug("Listing transactions for group", "group_id", groupID, "start_date", listParams.StartDate, "end_date", listParams.EndDate, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		transactions, err := store.GetTransactionsByGroupInPeriod(context.Background(), listParams)
-		if err != nil {
-			logger.Error("Failed to get transactions by group", "error", err, "group_id", groupID) // TODO: check error type to determine if transactions not found or unable to get transactions
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get transactions by group", "group_id", groupID) {
 			return
 		}
 
@@ -628,9 +612,7 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 			Note:            createTransactionReq.Note,
 			ByUser:          createTransactionReq.ByUser,
 		})
-		if err != nil {
-			logger.Error("Failed to create transaction", "error", err) // TODO: check error type to determine if transaction not found or unable to create transaction
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create transaction", "group_id", createTransactionReq.GroupID) {
 			return
 		}
 		logger.Debug("Transaction created successfully", slog.Int64("transaction_id", transaction.ID), slog.String("name", transaction.Name))
@@ -681,16 +663,12 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting balances for group", "group_id", groupID)
 
 		balances, err := store.GroupBalances(context.Background(), groupID)
-		if err != nil {
-			logger.Error("Failed to get group balances", "error", err, "group_id", groupID) // TODO: check error type to determine if balances not found or unable to get balances
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get group balances", "group_id", groupID) {
 			return
 		}
 
 		netBalances, err := store.GroupBalancesNet(context.Background(), groupID)
-		if err != nil {
-			logger.Error("Failed to get group net balances", "error", err, "group_id", groupID) // TODO: check error type to determine if net balances not found or unable to get net balances
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get group net balances", "group_id", groupID) {
 			return
 		}
 

@@ -71,9 +71,7 @@ func listUsers(store db.Store) http.HandlerFunc {
 		)
 
 		users, err := store.ListUsers(context.Background(), listuserparams)
-		if err != nil {
-			logger.Error("Failed to list users", "error", err)
-			http.Error(w, "An error has occured", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to list users", "limit", listuserparams.Limit, "offset", listuserparams.Offset) {
 			return
 		}
 
@@ -128,9 +126,7 @@ func getUserByID(store db.Store) http.HandlerFunc {
 
 		// Get user from database
 		user, err := store.GetUserByID(context.Background(), id)
-		if err != nil {
-			logger.Debug("Failed to get user by ID", "error", err, "user_id", id)
-			http.Error(w, "User not found", http.StatusNotFound)
+		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user by ID", "user_id", id) {
 			return
 		}
 
@@ -176,9 +172,7 @@ func createUser(store db.Store) http.HandlerFunc {
 
 		// Create user in database
 		user, err := store.CreateUser(context.Background(), createUserReq.Name)
-		if err != nil {
-			logger.Error("Failed to create user", "error", err, "name", createUserReq.Name)
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create user", "name", createUserReq.Name) {
 			return
 		}
 
@@ -247,9 +241,7 @@ func updateUser(store db.Store) http.HandlerFunc {
 			ID:   id,
 			Name: updateUserReq.Name,
 		})
-		if err != nil {
-			logger.Error("Failed to update user", "error", err, "user_id", id) // TODO: check error type to determine if user not found or unable to update
-			http.Error(w, "User not found or unable to update", http.StatusNotFound)
+		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to update user", "user_id", id) {
 			return
 		}
 
@@ -293,9 +285,7 @@ func deleteUser(store db.Store) http.HandlerFunc {
 
 		// Delete user from database
 		user, err := store.DeleteUser(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to delete user", "error", err, "user_id", id) // TODO: check error type to determine if user not found or unable to delete
-			http.Error(w, "User not found or unable to delete", http.StatusNotFound)
+		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to delete user", "user_id", id) {
 			return
 		}
 
@@ -401,9 +391,7 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 		)
 
 		transactions, err := store.GetTransactionsByUserInPeriod(context.Background(), listParams)
-		if err != nil {
-			logger.Error("Failed to get transactions by user", "error", err, "user_id", userID) // TODO: check error type to determine if user not found or unable to get transactions
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get transactions by user", "user_id", userID) {
 			return
 		}
 

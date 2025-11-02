@@ -74,9 +74,7 @@ func listSplits(store db.Store) http.HandlerFunc {
 		logger.Debug("Listing splits", "limit", listSplitParams.Limit, "offset", listSplitParams.Offset)
 
 		splits, err := store.ListSplits(context.Background(), listSplitParams)
-		if err != nil {
-			logger.Error("Failed to list splits", "error", err) // TODO: check error type to determine if splits not found or unable to list splits
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to list splits", "limit", listSplitParams.Limit, "offset", listSplitParams.Offset) {
 			return
 		}
 
@@ -131,9 +129,7 @@ func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting splits for transaction", "transaction_id", transactionID)
 
 		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
-		if err != nil {
-			logger.Error("Failed to get splits by transaction ID", "error", err, "transaction_id", transactionID) // TODO: check error type to determine if splits not found or unable to get splits
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by transaction ID", "transaction_id", transactionID) {
 			return
 		}
 
@@ -217,9 +213,7 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting splits for user", "user_id", userID, "limit", listParams.Limit, "offset", listParams.Offset)
 
 		splits, err := store.GetSplitsByUser(context.Background(), listParams)
-		if err != nil {
-			logger.Error("Failed to get splits by user", "error", err, "user_id", userID) // TODO: check error type to determine if splits not found or unable to get splits
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by user", "user_id", userID) {
 			return
 		}
 
@@ -275,9 +269,7 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 
 		// Get split from database
 		split, err := store.GetSplitByID(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to get split by ID", "error", err, "split_id", id) // TODO: check error type to determine if split not found or unable to get split
-			http.Error(w, "Split not found", http.StatusNotFound)
+		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to get split by ID", "split_id", id) {
 			return
 		}
 
@@ -331,9 +323,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 			SplitAmount:   createSplitReq.SplitAmount,
 			SplitUser:     createSplitReq.SplitUser,
 		})
-		if err != nil {
-			logger.Error("Failed to create split", "error", err) // TODO: check error type to determine if split not found or unable to create split
-			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to create split", "transaction_id", createSplitReq.TransactionID) {
 			return
 		}
 		logger.Debug("Split created successfully", "split_id", split.ID, "transaction_id", createSplitReq.TransactionID)
@@ -400,9 +390,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 			SplitAmount:  updateSplitReq.SplitAmount,
 			SplitUser:    updateSplitReq.SplitUser,
 		})
-		if err != nil {
-			logger.Error("Failed to update split", "error", err, "split_id", id) // TODO: check error type to determine if split not found or unable to update split
-			http.Error(w, "Split not found or unable to update", http.StatusNotFound)
+		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to update split", "split_id", id) {
 			return
 		}
 
@@ -451,9 +439,7 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 
 		// Delete split from database
 		split, err := store.DeleteSplit(context.Background(), id)
-		if err != nil {
-			logger.Error("Failed to delete split", "error", err, "split_id", id) // TODO: check error type to determine if split not found or unable to delete split
-			http.Error(w, "Split not found or unable to delete", http.StatusNotFound)
+		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to delete split", "split_id", id) {
 			return
 		}
 
