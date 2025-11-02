@@ -8,10 +8,9 @@
 - Implement User level (group agnostic) balance and debts reporting logic
 - Refactor API handlers to DRY?
 - Update API route docs
-- Update error messaging when DB does not return result (404 or 500)
-- Create transaction to add multiple group members at once
-    - Link group member to user
-- Update IDs to use designated preface
+- ~~Update error messaging when DB does not return result (404 or 500)~~
+- ~~Create transaction to add multiple group members at once~~
+- Update IDs to use designated preface -> revisit much later.
 - ~~Generate transaction for adding all splits for a transaction at once~~
     - Add function to calculte % or $ amount if missing from API request 
 - ~~Implement logging middleware for all endpoints~~
