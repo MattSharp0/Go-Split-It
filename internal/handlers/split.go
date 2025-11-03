@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
@@ -44,32 +42,15 @@ func SplitRoutes(s *server.Server, q db.Store) *http.ServeMux {
 func listSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse query parameters
-		queryParams := r.URL.Query()
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
-		// Default values
 		var listSplitParams db.ListSplitsParams
-		listSplitParams.Limit = 100
-		listSplitParams.Offset = 0
-
-		// Parse limit
-		if limitStr := queryParams.Get("limit"); limitStr != "" {
-			limit, err := strconv.ParseInt(limitStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
-				return
-			}
-			listSplitParams.Limit = int32(limit)
-		}
-
-		// Parse offset
-		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
-			offset, err := strconv.ParseInt(offsetStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
-			listSplitParams.Offset = int32(offset)
-		}
+		listSplitParams.Limit = limit
+		listSplitParams.Offset = offset
 
 		logger.Debug("Listing splits", "limit", listSplitParams.Limit, "offset", listSplitParams.Offset)
 
@@ -101,9 +82,7 @@ func listSplits(store db.Store) http.HandlerFunc {
 			Offset: listSplitParams.Offset,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			logger.Error("Failed to encode split responses", "error", err)
+		if err := WriteJSONResponseOK(w, listSplitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -113,16 +92,8 @@ func listSplits(store db.Store) http.HandlerFunc {
 func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {transaction_id} from path parameter
-		transactionIDStr := r.PathValue("transaction_id")
-		if transactionIDStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
@@ -156,9 +127,7 @@ func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 			Offset: 0,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			logger.Error("Failed to encode split responses", "error", err)
+		if err := WriteJSONResponseOK(w, listSplitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -168,47 +137,22 @@ func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 func getSplitsByUser(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {user_id} from path parameter
-		userIDStr := r.PathValue("user_id")
-		if userIDStr == "" {
-			http.Error(w, "User ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		userID, err := strconv.ParseInt(userIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid user ID format", http.StatusBadRequest)
+		userID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
+		if !ok {
 			return
 		}
 
 		// Parse query parameters
-		queryParams := r.URL.Query()
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
-		// Default values
 		var listParams db.GetSplitsByUserParams
 		listParams.SplitUser = &userID
-		listParams.Limit = 100
-		listParams.Offset = 0
-
-		// Parse limit
-		if limitStr := queryParams.Get("limit"); limitStr != "" {
-			limit, err := strconv.ParseInt(limitStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
-				return
-			}
-			listParams.Limit = int32(limit)
-		}
-
-		// Parse offset
-		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
-			offset, err := strconv.ParseInt(offsetStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
-			listParams.Offset = int32(offset)
-		}
+		listParams.Limit = limit
+		listParams.Offset = offset
 
 		logger.Debug("Getting splits for user", "user_id", userID, "limit", listParams.Limit, "offset", listParams.Offset)
 
@@ -240,9 +184,7 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 			Offset: listParams.Offset,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			logger.Error("Failed to encode split responses", "error", err)
+		if err := WriteJSONResponseOK(w, listSplitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -252,16 +194,8 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 func getSplitByID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Split ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid split ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Split ID is required")
+		if !ok {
 			return
 		}
 
@@ -286,9 +220,7 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			logger.Error("Failed to encode split response", "error", err)
+		if err := WriteJSONResponseOK(w, splitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -298,12 +230,8 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 func createSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var createSplitReq models.CreateSplitRequest
-		err := decoder.Decode(&createSplitReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &createSplitReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -341,10 +269,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			logger.Error("Failed to encode split response", "error", err)
+		if err := WriteJSONResponseCreated(w, splitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -357,26 +282,14 @@ func createSplit(store db.Store) http.HandlerFunc {
 func updateSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Split ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid split ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Split ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var updateSplitReq models.UpdateSplitRequest
-		err = decoder.Decode(&updateSplitReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &updateSplitReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -407,9 +320,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			logger.Error("Failed to encode split response", "error", err)
+		if err := WriteJSONResponseOK(w, splitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -422,16 +333,8 @@ func updateSplit(store db.Store) http.HandlerFunc {
 func deleteSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Split ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid split ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Split ID is required")
+		if !ok {
 			return
 		}
 
@@ -456,9 +359,7 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with deleted split data
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			logger.Error("Failed to encode split response", "error", err)
+		if err := WriteJSONResponseOK(w, splitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -468,15 +369,13 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 // Recommended to use createTransactionSplits instead
 func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
 
 		var req struct {
 			TransactionID int64                       `json:"transaction_id"`
 			Splits        []models.CreateSplitRequest `json:"splits"`
 		}
 
-		if err := decoder.Decode(&req); err != nil {
+		if err := DecodeJSONBody(r, &req); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -549,10 +448,7 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 			Splits: splitResponses,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode response", "error", err)
+		if err := WriteJSONResponseCreated(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -562,28 +458,18 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 func createTransactionSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {transaction_id} from path parameter
-		transactionIDStr := r.PathValue("transaction_id")
-		if transactionIDStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
 
 		var req struct {
 			Splits []models.CreateSplitRequest `json:"splits"`
 		}
 
-		if err := decoder.Decode(&req); err != nil {
+		if err := DecodeJSONBody(r, &req); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -640,9 +526,7 @@ func createTransactionSplits(store db.Store) http.HandlerFunc {
 			Message: fmt.Sprintf("Successfully created %d splits", len(result.Splits)),
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode response", "error", err)
+		if err := WriteJSONResponseCreated(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -652,28 +536,18 @@ func createTransactionSplits(store db.Store) http.HandlerFunc {
 func updateTransactionSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {transaction_id} from path parameter
-		transactionIDStr := r.PathValue("transaction_id")
-		if transactionIDStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
 
 		var req struct {
 			Splits []models.CreateSplitRequest `json:"splits"`
 		}
 
-		if err := decoder.Decode(&req); err != nil {
+		if err := DecodeJSONBody(r, &req); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -746,9 +620,7 @@ func updateTransactionSplits(store db.Store) http.HandlerFunc {
 			Message:       fmt.Sprintf("Successfully replaced %d splits with %d new splits", len(result.DeletedSplits), len(result.NewSplits)),
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode response", "error", err)
+		if err := WriteJSONResponseOK(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

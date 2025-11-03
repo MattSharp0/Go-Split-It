@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
@@ -49,32 +47,15 @@ func GroupRoutes(s *server.Server, q db.Store) *http.ServeMux {
 func listGroups(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse query parameters
-		queryParams := r.URL.Query()
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
-		// Default values
 		var listGroupParams db.ListGroupsParams
-		listGroupParams.Limit = 100
-		listGroupParams.Offset = 0
-
-		// Parse limit
-		if limitStr := queryParams.Get("limit"); limitStr != "" {
-			limit, err := strconv.ParseInt(limitStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
-				return
-			}
-			listGroupParams.Limit = int32(limit)
-		}
-
-		// Parse offset
-		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
-			offset, err := strconv.ParseInt(offsetStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
-			listGroupParams.Offset = int32(offset)
-		}
+		listGroupParams.Limit = limit
+		listGroupParams.Offset = offset
 
 		logger.Debug("Listing groups", "limit", listGroupParams.Limit, "offset", listGroupParams.Offset)
 
@@ -100,9 +81,7 @@ func listGroups(store db.Store) http.HandlerFunc {
 			Offset: listGroupParams.Offset,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listGroupResponse); err != nil {
-			logger.Error("Failed to encode group responses", "error", err)
+		if err := WriteJSONResponseOK(w, listGroupResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -112,16 +91,8 @@ func listGroups(store db.Store) http.HandlerFunc {
 func getGroupByID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Group ID is required")
+		if !ok {
 			return
 		}
 
@@ -140,9 +111,7 @@ func getGroupByID(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			logger.Error("Failed to encode group response", "error", err)
+		if err := WriteJSONResponseOK(w, groupResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -152,12 +121,8 @@ func getGroupByID(store db.Store) http.HandlerFunc {
 func createGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var createGroupReq models.CreateGroupRequest
-		err := decoder.Decode(&createGroupReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &createGroupReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -184,10 +149,7 @@ func createGroup(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			logger.Error("Failed to encode group response", "error", err)
+		if err := WriteJSONResponseCreated(w, groupResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -197,26 +159,14 @@ func createGroup(store db.Store) http.HandlerFunc {
 func updateGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var updateGroupReq models.UpdateGroupRequest
-		err = decoder.Decode(&updateGroupReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &updateGroupReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -245,9 +195,7 @@ func updateGroup(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			logger.Error("Failed to encode group response", "error", err)
+		if err := WriteJSONResponseOK(w, groupResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -257,16 +205,8 @@ func updateGroup(store db.Store) http.HandlerFunc {
 func deleteGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Group ID is required")
+		if !ok {
 			return
 		}
 
@@ -285,9 +225,7 @@ func deleteGroup(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with deleted group data
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(groupResponse); err != nil {
-			logger.Error("Failed to encode group response", "error", err)
+		if err := WriteJSONResponseOK(w, groupResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -301,47 +239,22 @@ func deleteGroup(store db.Store) http.HandlerFunc {
 func listGroupMembers(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Parse query parameters
-		queryParams := r.URL.Query()
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
-		// Default values
 		var listParams db.ListGroupMembersByGroupIDParams
 		listParams.GroupID = groupID
-		listParams.Limit = 100
-		listParams.Offset = 0
-
-		// Parse limit
-		if limitStr := queryParams.Get("limit"); limitStr != "" {
-			limit, err := strconv.ParseInt(limitStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
-				return
-			}
-			listParams.Limit = int32(limit)
-		}
-
-		// Parse offset
-		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
-			offset, err := strconv.ParseInt(offsetStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
-			listParams.Offset = int32(offset)
-		}
+		listParams.Limit = limit
+		listParams.Offset = offset
 
 		logger.Debug("Listing group members", "group_id", groupID, "limit", listParams.Limit, "offset", listParams.Offset)
 
@@ -372,9 +285,7 @@ func listGroupMembers(store db.Store) http.HandlerFunc {
 			Offset:       listParams.Offset,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listGroupMemberResponse); err != nil {
-			logger.Error("Failed to encode group member responses", "error", err)
+		if err := WriteJSONResponseOK(w, listGroupMemberResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -386,26 +297,14 @@ func listGroupMembers(store db.Store) http.HandlerFunc {
 func createGroupMemberNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var createGroupMemberReq models.CreateGroupMemberRequest
-		err = decoder.Decode(&createGroupMemberReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &createGroupMemberReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -435,10 +334,7 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(groupMemberResponse); err != nil {
-			logger.Error("Failed to encode group member response", "error", err)
+		if err := WriteJSONResponseCreated(w, groupMemberResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -450,72 +346,43 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Parse query parameters
-		queryParams := r.URL.Query()
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		// Default values
 		var listParams db.GetTransactionsByGroupInPeriodParams
 		listParams.GroupID = groupID
 
 		// Default to past year, TODO: make this configurable
-		listParams.StartDate = time.Now().AddDate(-1, 0, 0)
-		listParams.EndDate = time.Now()
+		defaultStartDate := time.Now().AddDate(-1, 0, 0)
+		defaultEndDate := time.Now()
 
-		listParams.Limit = 100
-		listParams.Offset = 0
-
-		// Parse start_date
-		if startDateStr := queryParams.Get("start_date"); startDateStr != "" {
-			startDate, err := time.Parse("2006-01-02", startDateStr)
-			if err != nil {
-				http.Error(w, "Invalid start_date format, use YYYY-MM-DD", http.StatusBadRequest)
-				return
-			}
-			listParams.StartDate = startDate
+		// Parse dates
+		startDate, err := ParseQueryDate(r, "start_date", defaultStartDate)
+		if err != nil {
+			http.Error(w, "Invalid start_date format, use YYYY-MM-DD", http.StatusBadRequest)
+			return
 		}
 
-		// Parse end_date
-		if endDateStr := queryParams.Get("end_date"); endDateStr != "" {
-			endDate, err := time.Parse("2006-01-02", endDateStr)
-			if err != nil {
-				http.Error(w, "Invalid end_date format, use YYYY-MM-DD", http.StatusBadRequest)
-				return
-			}
-			listParams.EndDate = endDate
+		endDate, err := ParseQueryDate(r, "end_date", defaultEndDate)
+		if err != nil {
+			http.Error(w, "Invalid end_date format, use YYYY-MM-DD", http.StatusBadRequest)
+			return
 		}
 
-		// Parse limit
-		if limitStr := queryParams.Get("limit"); limitStr != "" {
-			limit, err := strconv.ParseInt(limitStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
-				return
-			}
-			listParams.Limit = int32(limit)
-		}
-
-		// Parse offset
-		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
-			offset, err := strconv.ParseInt(offsetStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
-			listParams.Offset = int32(offset)
-		}
+		listParams.StartDate = startDate
+		listParams.EndDate = endDate
+		listParams.Limit = limit
+		listParams.Offset = offset
 
 		logger.Debug("Listing transactions for group", "group_id", groupID, "start_date", listParams.StartDate, "end_date", listParams.EndDate, "limit", listParams.Limit, "offset", listParams.Offset)
 
@@ -549,9 +416,7 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 			Offset:       listParams.Offset,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listTransactionResponse); err != nil {
-			logger.Error("Failed to encode transaction responses", "error", err)
+		if err := WriteJSONResponseOK(w, listTransactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -563,26 +428,14 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 func createTransactionNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var createTransactionReq models.CreateTransactionRequest
-		err = decoder.Decode(&createTransactionReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &createTransactionReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -632,10 +485,7 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			logger.Error("Failed to encode transaction response", "error", err)
+		if err := WriteJSONResponseCreated(w, transactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -647,16 +497,8 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 func getGroupBalances(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
@@ -755,9 +597,7 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 			SimplifiedPaymentsCount: int32(len(simplifiedResponses)),
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode balance response", "error", err)
+		if err := WriteJSONResponseOK(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -771,26 +611,14 @@ func getGroupBalances(store db.Store) http.HandlerFunc {
 func createGroupMembersForGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var batchReq models.BatchCreateGroupMemberRequest
-		err = decoder.Decode(&batchReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &batchReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -847,10 +675,7 @@ func createGroupMembersForGroup(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode batch create response", "error", err)
+		if err := WriteJSONResponseCreated(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -862,26 +687,14 @@ func createGroupMembersForGroup(store db.Store) http.HandlerFunc {
 func updateGroupMembersForGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var batchReq models.BatchUpdateGroupMemberRequest
-		err = decoder.Decode(&batchReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &batchReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -946,9 +759,7 @@ func updateGroupMembersForGroup(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode batch update response", "error", err)
+		if err := WriteJSONResponseOK(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -960,23 +771,15 @@ func updateGroupMembersForGroup(store db.Store) http.HandlerFunc {
 func deleteGroupMembersForGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {group_id} from path parameter
-		groupIDStr := r.PathValue("group_id")
-		if groupIDStr == "" {
-			http.Error(w, "Group ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid group ID format", http.StatusBadRequest)
+		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
+		if !ok {
 			return
 		}
 
 		logger.Debug("Deleting group members in batch", "group_id", groupID)
 
 		// Delete all group members using transaction
-		err = store.DeleteGroupMembersTx(context.Background(), groupID)
+		err := store.DeleteGroupMembersTx(context.Background(), groupID)
 		if err != nil {
 			logger.Error("Failed to delete group members", "error", err, "group_id", groupID)
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
@@ -991,9 +794,7 @@ func deleteGroupMembersForGroup(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			logger.Error("Failed to encode batch delete response", "error", err)
+		if err := WriteJSONResponseOK(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

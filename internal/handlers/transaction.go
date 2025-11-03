@@ -2,10 +2,8 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
-	"strconv"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
@@ -36,32 +34,15 @@ func TransactionRoutes(s *server.Server, q db.Store) *http.ServeMux {
 func listTransactions(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse query parameters
-		queryParams := r.URL.Query()
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
 
-		// Default values
 		var listTransactionParams db.ListTransactionsParams
-		listTransactionParams.Limit = 100
-		listTransactionParams.Offset = 0
-
-		// Parse limit
-		if limitStr := queryParams.Get("limit"); limitStr != "" {
-			limit, err := strconv.ParseInt(limitStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
-				return
-			}
-			listTransactionParams.Limit = int32(limit)
-		}
-
-		// Parse offset
-		if offsetStr := queryParams.Get("offset"); offsetStr != "" {
-			offset, err := strconv.ParseInt(offsetStr, 10, 32)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
-			listTransactionParams.Offset = int32(offset)
-		}
+		listTransactionParams.Limit = limit
+		listTransactionParams.Offset = offset
 
 		logger.Debug("Listing transactions",
 			"limit", listTransactionParams.Limit,
@@ -98,9 +79,7 @@ func listTransactions(store db.Store) http.HandlerFunc {
 			Offset:       listTransactionParams.Offset,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listTransactionResponse); err != nil {
-			logger.Error("Failed to encode transaction responses", "error", err)
+		if err := WriteJSONResponseOK(w, listTransactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -110,16 +89,8 @@ func listTransactions(store db.Store) http.HandlerFunc {
 func getTransactionByID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
@@ -146,9 +117,7 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			logger.Error("Failed to encode transaction response", "error", err)
+		if err := WriteJSONResponseOK(w, transactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -158,12 +127,8 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 func createTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var createTransactionReq models.CreateTransactionRequest
-		err := decoder.Decode(&createTransactionReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &createTransactionReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -220,10 +185,7 @@ func createTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			logger.Error("Failed to encode transaction response", "error", err)
+		if err := WriteJSONResponseCreated(w, transactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -233,26 +195,14 @@ func createTransaction(store db.Store) http.HandlerFunc {
 func updateTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var updateTransactionReq models.UpdateTransactionRequest
-		err = decoder.Decode(&updateTransactionReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &updateTransactionReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -303,9 +253,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			logger.Error("Failed to encode transaction response", "error", err)
+		if err := WriteJSONResponseOK(w, transactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -315,16 +263,8 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 func deleteTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {id} from path parameter
-		idStr := r.PathValue("id")
-		if idStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		id, err := strconv.ParseInt(idStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		id, ok := ParsePathInt64(w, r, "id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
@@ -351,9 +291,7 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with deleted transaction data
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(transactionResponse); err != nil {
-			logger.Error("Failed to encode transaction response", "error", err)
+		if err := WriteJSONResponseOK(w, transactionResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -367,16 +305,8 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {transaction_id} from path parameter
-		transactionIDStr := r.PathValue("transaction_id")
-		if transactionIDStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
@@ -410,9 +340,7 @@ func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 			Offset: 0,
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(listSplitResponse); err != nil {
-			logger.Error("Failed to encode split responses", "error", err)
+		if err := WriteJSONResponseOK(w, listSplitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
@@ -424,26 +352,14 @@ func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 func createSplitNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Extract {transaction_id} from path parameter
-		transactionIDStr := r.PathValue("transaction_id")
-		if transactionIDStr == "" {
-			http.Error(w, "Transaction ID is required", http.StatusBadRequest)
-			return
-		}
-
-		// Convert string ID to int64
-		transactionID, err := strconv.ParseInt(transactionIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid transaction ID format", http.StatusBadRequest)
+		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
+		if !ok {
 			return
 		}
 
 		// Decode request body
-		decoder := json.NewDecoder(r.Body)
-		defer r.Body.Close()
-
 		var createSplitReq models.CreateSplitRequest
-		err = decoder.Decode(&createSplitReq)
-		if err != nil {
+		if err := DecodeJSONBody(r, &createSplitReq); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
@@ -478,10 +394,7 @@ func createSplitNested(store db.Store) http.HandlerFunc {
 		}
 
 		// Send response with 201 Created status
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
-		if err := json.NewEncoder(w).Encode(splitResponse); err != nil {
-			logger.Error("Failed to encode split response", "error", err)
+		if err := WriteJSONResponseCreated(w, splitResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}
