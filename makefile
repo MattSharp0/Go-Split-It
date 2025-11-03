@@ -31,8 +31,19 @@ migratedown:
 
 sqlc:
 	sqlc generate
+
+test:
+	go test ./... -v
+
+test-coverage:
+	go test ./... -cover
+
+test-coverage-html:
+	go test ./... -coverprofile=coverage.out
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated at coverage.html"
     
 # docker_build:
 #     docker build --build-arg DATABASE_URL="$(DATABASE_URL)" -t splitapp .
 
-.PHONY: hello postgres createdb dropdb sqlc migrateup migratedown
+.PHONY: hello postgres createdb dropdb sqlc migrateup migratedown test test-coverage test-coverage-html
