@@ -44,3 +44,35 @@ type GroupBalancesResponse struct {
 	NetCount                int32                        `json:"net_count"`
 	SimplifiedPaymentsCount int32                        `json:"simplified_payments_count"`
 }
+
+// User balance response types
+type UserBalancesSummaryResponse struct {
+	TotalOwed       decimal.Decimal `json:"total_owed"`
+	TotalOwedToUser decimal.Decimal `json:"total_owed_to_user"`
+	NetBalance      decimal.Decimal `json:"net_balance"`
+}
+
+type UserBalanceByGroupResponse struct {
+	GroupID         int64           `json:"group_id"`
+	GroupName       string          `json:"group_name"`
+	NetBalance      decimal.Decimal `json:"net_balance"`
+	TotalOwed       decimal.Decimal `json:"total_owed"`         // negative net_balance amounts
+	TotalOwedToUser decimal.Decimal `json:"total_owed_to_user"` // positive net_balance amounts
+}
+
+type UserBalanceByMemberResponse struct {
+	MemberID        int64           `json:"member_id"`
+	MemberName      string          `json:"member_name"`
+	NetBalance      decimal.Decimal `json:"net_balance"`
+	TotalOwed       decimal.Decimal `json:"total_owed"`         // negative net_balance
+	TotalOwedToUser decimal.Decimal `json:"total_owed_to_user"` // positive net_balance
+}
+
+type UserBalancesResponse struct {
+	UserID           int64                         `json:"user_id"`
+	Summary          UserBalancesSummaryResponse   `json:"summary"`
+	BalancesByGroup  []UserBalanceByGroupResponse  `json:"balances_by_group"`
+	BalancesByMember []UserBalanceByMemberResponse `json:"balances_by_member"`
+	GroupCount       int32                         `json:"group_count"`
+	MemberCount      int32                         `json:"member_count"`
+}

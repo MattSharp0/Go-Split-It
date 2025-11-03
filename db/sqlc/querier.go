@@ -48,6 +48,12 @@ type Querier interface {
 	UpdateSplit(ctx context.Context, arg UpdateSplitParams) (Split, error)
 	UpdateTransaction(ctx context.Context, arg UpdateTransactionParams) (Transaction, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	// Returns balances by group for a specific user
+	// Only includes groups where the user is a member (filtered via WHERE gm.user_id = $1)
+	// This is the correct place to filter by user membership for security and performance
+	UserBalancesByGroup(ctx context.Context, userID *int64) ([]UserBalancesByGroupRow, error)
+	UserBalancesByMember(ctx context.Context, userID *int64) ([]UserBalancesByMemberRow, error)
+	UserBalancesSummary(ctx context.Context, userID *int64) (UserBalancesSummaryRow, error)
 	getTransactionsByGroup(ctx context.Context, arg getTransactionsByGroupParams) ([]Transaction, error)
 }
 

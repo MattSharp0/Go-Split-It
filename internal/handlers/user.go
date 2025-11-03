@@ -10,6 +10,7 @@ import (
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
+	"github.com/shopspring/decimal"
 )
 
 func UserRoutes(s *server.Server, q db.Store) *http.ServeMux {
@@ -27,6 +28,7 @@ func UserRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 	// Nested resource handlers - RESTful approach for user transactions
 	mux.HandleFunc("GET /{user_id}/transactions", getTransactionsByUserNested(q)) // GET: List transactions by user
+	mux.HandleFunc("GET /{user_id}/balances", getUserBalances(q))                 // GET: Get user balances
 
 	return mux
 }
@@ -334,5 +336,103 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 		}
 
 		logger.Debug("Successfully listed user transactions", "user_id", userID, "count", count)
+	}
+}
+
+// Get user balances
+// GET /users/{user_id}/balances
+func getUserBalances(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract {user_id} from path parameter
+		userID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
+		if !ok {
+			return
+		}
+
+		logger.Debug("Getting balances for user", "user_id", userID)
+
+		// Get summary
+		summaryRow, err := store.UserBalancesSummary(context.Background(), &userID)
+		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user balances summary", "user_id", userID) {
+			return
+		}
+
+		// logger.Debug("User balances summary",
+		// 	"user_id", userID,
+		// 	"net_balance", summaryRow.NetBalance.String(),
+		// 	"total_owed", summaryRow.TotalOwed.String(),
+		// 	"total_owed_to_user", summaryRow.TotalOwedToUser.String())
+
+		summary := models.UserBalancesSummaryResponse{
+			NetBalance:      summaryRow.NetBalance,
+			TotalOwed:       summaryRow.TotalOwed,
+			TotalOwedToUser: summaryRow.TotalOwedToUser,
+		}
+
+		// Get balances by group
+		balancesByGroupRows, err := store.UserBalancesByGroup(context.Background(), &userID)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by group", "user_id", userID) {
+			return
+		}
+
+		balancesByGroup := make([]models.UserBalanceByGroupResponse, len(balancesByGroupRows))
+		for i, bg := range balancesByGroupRows {
+			totalOwed := decimal.Zero
+			totalOwedToUser := decimal.Zero
+			if bg.NetBalance.IsNegative() {
+				totalOwed = bg.NetBalance.Neg()
+			} else if bg.NetBalance.IsPositive() {
+				totalOwedToUser = bg.NetBalance
+			}
+			balancesByGroup[i] = models.UserBalanceByGroupResponse{
+				GroupID:         bg.GroupID,
+				GroupName:       bg.GroupName,
+				NetBalance:      bg.NetBalance,
+				TotalOwed:       totalOwed,
+				TotalOwedToUser: totalOwedToUser,
+			}
+		}
+
+		// Get balances by member
+		balancesByMemberRows, err := store.UserBalancesByMember(context.Background(), &userID)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by member", "user_id", userID) {
+			return
+		}
+
+		balancesByMember := make([]models.UserBalanceByMemberResponse, len(balancesByMemberRows))
+		for i, bm := range balancesByMemberRows {
+			memberID := int64(0)
+			if bm.MemberUserID != nil {
+				memberID = *bm.MemberUserID
+			}
+			totalOwed := decimal.Zero
+			totalOwedToUser := decimal.Zero
+			if bm.NetBalance.IsNegative() {
+				totalOwed = bm.NetBalance.Neg()
+			} else if bm.NetBalance.IsPositive() {
+				totalOwedToUser = bm.NetBalance
+			}
+			balancesByMember[i] = models.UserBalanceByMemberResponse{
+				MemberID:        memberID,
+				MemberName:      bm.MemberName,
+				NetBalance:      bm.NetBalance,
+				TotalOwed:       totalOwed,
+				TotalOwedToUser: totalOwedToUser,
+			}
+		}
+
+		response := models.UserBalancesResponse{
+			UserID:           userID,
+			Summary:          summary,
+			BalancesByGroup:  balancesByGroup,
+			BalancesByMember: balancesByMember,
+			GroupCount:       int32(len(balancesByGroup)),
+			MemberCount:      int32(len(balancesByMember)),
+		}
+
+		if err := WriteJSONResponseOK(w, response); err != nil {
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
 	}
 }

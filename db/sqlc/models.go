@@ -66,3 +66,14 @@ type User struct {
 	CreatedAt  time.Time `json:"created_at"`
 	ModifiedAt time.Time `json:"modified_at"`
 }
+
+type UserBalancesByMember struct {
+	UserID       *int64          `json:"user_id"`
+	MemberUserID *int64          `json:"member_user_id"`
+	NetBalance   decimal.Decimal `json:"net_balance"`
+}
+
+type UserBalancesNet struct {
+	UserID     *int64          `json:"user_id"`
+	NetBalance decimal.Decimal `json:"net_balance"`
+}

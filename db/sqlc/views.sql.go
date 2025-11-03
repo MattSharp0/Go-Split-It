@@ -95,3 +95,110 @@ func (q *Queries) GroupBalancesNet(ctx context.Context, groupID int64) ([]GroupB
 	}
 	return items, nil
 }
+
+const userBalancesByGroup = `-- name: UserBalancesByGroup :many
+SELECT
+    g.id as group_id,
+    g.name as group_name,
+    gbn.net_balance::numeric(10,2) as net_balance
+FROM group_balances_net gbn
+JOIN group_members gm on gm.id = gbn.user_id
+JOIN groups g on g.id = gbn.group_id
+WHERE gm.user_id = $1
+ORDER BY g.name
+`
+
+type UserBalancesByGroupRow struct {
+	GroupID    int64           `json:"group_id"`
+	GroupName  string          `json:"group_name"`
+	NetBalance decimal.Decimal `json:"net_balance"`
+}
+
+// Returns balances by group for a specific user
+// Only includes groups where the user is a member (filtered via WHERE gm.user_id = $1)
+// This is the correct place to filter by user membership for security and performance
+func (q *Queries) UserBalancesByGroup(ctx context.Context, userID *int64) ([]UserBalancesByGroupRow, error) {
+	rows, err := q.db.Query(ctx, userBalancesByGroup, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserBalancesByGroupRow{}
+	for rows.Next() {
+		var i UserBalancesByGroupRow
+		if err := rows.Scan(&i.GroupID, &i.GroupName, &i.NetBalance); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const userBalancesByMember = `-- name: UserBalancesByMember :many
+SELECT
+    ubm.member_user_id as member_user_id,
+    u.name as member_name,
+    ubm.net_balance::numeric(10,2) as net_balance
+FROM user_balances_by_member ubm
+JOIN users u on u.id = ubm.member_user_id
+WHERE ubm.user_id = $1
+ORDER BY u.name
+`
+
+type UserBalancesByMemberRow struct {
+	MemberUserID *int64          `json:"member_user_id"`
+	MemberName   string          `json:"member_name"`
+	NetBalance   decimal.Decimal `json:"net_balance"`
+}
+
+func (q *Queries) UserBalancesByMember(ctx context.Context, userID *int64) ([]UserBalancesByMemberRow, error) {
+	rows, err := q.db.Query(ctx, userBalancesByMember, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserBalancesByMemberRow{}
+	for rows.Next() {
+		var i UserBalancesByMemberRow
+		if err := rows.Scan(&i.MemberUserID, &i.MemberName, &i.NetBalance); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const userBalancesSummary = `-- name: UserBalancesSummary :one
+SELECT
+    (SELECT 
+        COALESCE(SUM(ubn.net_balance), 0)::numeric(10,2)
+        FROM user_balances_net ubn 
+        WHERE ubn.user_id = $1) as net_balance,
+    (SELECT 
+        COALESCE(SUM(CASE WHEN ubm.net_balance < 0 THEN -ubm.net_balance ELSE 0 END), 0)::numeric(10,2)
+     FROM user_balances_by_member ubm 
+     WHERE ubm.user_id = $1) as total_owed,
+    (SELECT 
+        COALESCE(SUM(CASE WHEN ubm.net_balance > 0 THEN ubm.net_balance ELSE 0 END), 0)::numeric(10,2)
+     FROM user_balances_by_member ubm 
+     WHERE ubm.user_id = $1) as total_owed_to_user
+`
+
+type UserBalancesSummaryRow struct {
+	NetBalance      decimal.Decimal `json:"net_balance"`
+	TotalOwed       decimal.Decimal `json:"total_owed"`
+	TotalOwedToUser decimal.Decimal `json:"total_owed_to_user"`
+}
+
+func (q *Queries) UserBalancesSummary(ctx context.Context, userID *int64) (UserBalancesSummaryRow, error) {
+	row := q.db.QueryRow(ctx, userBalancesSummary, userID)
+	var i UserBalancesSummaryRow
+	err := row.Scan(&i.NetBalance, &i.TotalOwed, &i.TotalOwedToUser)
+	return i, err
+}
