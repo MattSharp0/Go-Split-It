@@ -165,9 +165,10 @@ func TestServiceFunction(t *testing.T) {
 
 - **Helper Functions**: ParsePathInt64, ParseQueryInt32, ParseLimitOffset, DecodeJSONBody, WriteJSONResponse, HandleDBError, HandleDBListError
 - **User Handlers**: listUsers, getUserByID, createUser, updateUser, deleteUser, getUserBalances, getTransactionsByUserNested
-- **Group Handlers**: (To be added)
-- **Transaction Handlers**: (To be added)
-- **Split Handlers**: (To be added)
+- **Group Handlers**: listGroups, getGroupByID, createGroup, updateGroup, deleteGroup
+- **Group Member Handlers**: listGroupMembersByGroupID, getGroupMemberByID, createGroupMember, updateGroupMember, deleteGroupMember
+- **Transaction Handlers**: listTransactions, getTransactionByID, createTransaction, updateTransaction, deleteTransaction, getSplitsByTransactionNested
+- **Split Handlers**: listSplits, getSplitsByTransactionID, getSplitByID, createSplit, updateSplit, deleteSplit
 
 ### Services (`internal/services/`)
 
