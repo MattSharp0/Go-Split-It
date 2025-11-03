@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 )
 
 // LogLevel represents the logging level
@@ -91,17 +92,46 @@ func (h *customHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	// Source information (file:line) if available
 	if h.opts.AddSource && r.PC != 0 {
-		fs := runtime.CallersFrames([]uintptr{r.PC})
-		f, _ := fs.Next()
-
-		// Extract just the filename (not full path)
-		file := filepath.Base(f.File)
-
-		buf = append(buf, '[')
-		buf = append(buf, file...)
-		buf = append(buf, ':')
-		buf = append(buf, fmt.Sprintf("%d", f.Line)...)
-		buf = append(buf, "] "...)
+		// Get the actual caller by walking up the call stack
+		// Skip frames: runtime/internal, slog, logger package
+		pc := make([]uintptr, 10)
+		n := runtime.Callers(0, pc)
+		if n > 0 {
+			frames := runtime.CallersFrames(pc[:n])
+			var found bool
+			for {
+				frame, more := frames.Next()
+				if !more {
+					break
+				}
+				// Skip internal runtime, slog, and logger package frames
+				if strings.Contains(frame.File, "runtime/") ||
+					strings.Contains(frame.File, "log/slog") ||
+					strings.Contains(frame.File, "internal/logger/") {
+					continue
+				}
+				// Found the actual caller
+				file := filepath.Base(frame.File)
+				buf = append(buf, '[')
+				buf = append(buf, file...)
+				buf = append(buf, ':')
+				buf = append(buf, fmt.Sprintf("%d", frame.Line)...)
+				buf = append(buf, "] "...)
+				found = true
+				break
+			}
+			// Fallback to r.PC if we couldn't find a caller
+			if !found {
+				fs := runtime.CallersFrames([]uintptr{r.PC})
+				f, _ := fs.Next()
+				file := filepath.Base(f.File)
+				buf = append(buf, '[')
+				buf = append(buf, file...)
+				buf = append(buf, ':')
+				buf = append(buf, fmt.Sprintf("%d", f.Line)...)
+				buf = append(buf, "] "...)
+			}
+		}
 	}
 
 	// Message
@@ -254,22 +284,38 @@ func Get() *slog.Logger {
 
 // Debug logs a debug message
 func Debug(msg string, args ...any) {
-	Get().Debug(msg, args...)
+	var pcs [1]uintptr
+	runtime.Callers(2, pcs[:]) // Skip Callers and Debug
+	r := slog.NewRecord(time.Now(), slog.LevelDebug, msg, pcs[0])
+	r.Add(args...)
+	Get().Handler().Handle(context.Background(), r)
 }
 
 // Info logs an info message
 func Info(msg string, args ...any) {
-	Get().Info(msg, args...)
+	var pcs [1]uintptr
+	runtime.Callers(2, pcs[:]) // Skip Callers and Info
+	r := slog.NewRecord(time.Now(), slog.LevelInfo, msg, pcs[0])
+	r.Add(args...)
+	Get().Handler().Handle(context.Background(), r)
 }
 
 // Warn logs a warning message
 func Warn(msg string, args ...any) {
-	Get().Warn(msg, args...)
+	var pcs [1]uintptr
+	runtime.Callers(2, pcs[:]) // Skip Callers and Warn
+	r := slog.NewRecord(time.Now(), slog.LevelWarn, msg, pcs[0])
+	r.Add(args...)
+	Get().Handler().Handle(context.Background(), r)
 }
 
 // Error logs an error message
 func Error(msg string, args ...any) {
-	Get().Error(msg, args...)
+	var pcs [1]uintptr
+	runtime.Callers(2, pcs[:]) // Skip Callers and Error
+	r := slog.NewRecord(time.Now(), slog.LevelError, msg, pcs[0])
+	r.Add(args...)
+	Get().Handler().Handle(context.Background(), r)
 }
 
 // With returns a logger with the given attributes
