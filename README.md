@@ -32,6 +32,7 @@ The API supports intuitive nested routes that follow the resource hierarchy:
 - `/groups/{group_id}/balances` - Balance reports for a group
 - `/transactions/{transaction_id}/splits` - Splits within a transaction
 - `/users/{user_id}/transactions` - Transactions created by a user
+- `/users/{user_id}/balances` - Balance reports for a User (group agnostic)
 
 ### Direct Access Routes (Backwards Compatible)
 
@@ -98,6 +99,66 @@ Retrieve a specific user by their ID.
   "modified_at": "2024-01-15T10:30:00Z"
 }
 ```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid user ID format
+- `404 Not Found` - User not found
+
+### Get User Balances
+
+Retrieve comprehensive balance information for a specific user across all groups.
+
+**Endpoint:** `GET /users/{user_id}/balances`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `user_id` | integer | Yes | User ID |
+
+**Response:** `200 OK`
+```json
+{
+  "user_id": 1,
+  "summary": {
+    "net_balance": "125.50",
+    "total_owed": "75.25",
+    "total_owed_to_user": "200.75"
+  },
+  "balances_by_group": [
+    {
+      "group_id": 1,
+      "group_name": "Roommates",
+      "net_balance": "125.50",
+      "total_owed": "0.00",
+      "total_owed_to_user": "125.50"
+    }
+  ],
+  "balances_by_member": [
+    {
+      "member_id": 2,
+      "member_name": "Jane Smith",
+      "net_balance": "-62.75",
+      "total_owed": "62.75",
+      "total_owed_to_user": "0.00"
+    }
+  ],
+  "group_count": 1,
+  "member_count": 1
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| `user_id` | integer | The user ID |
+| `summary` | object | Overall balance summary across all groups |
+| `summary.net_balance` | string (decimal) | Net balance (positive = owed to user, negative = user owes) |
+| `summary.total_owed` | string (decimal) | Total amount user owes to others |
+| `summary.total_owed_to_user` | string (decimal) | Total amount others owe to user |
+| `balances_by_group` | array | Breakdown by group |
+| `balances_by_member` | array | Breakdown by individual members |
+| `group_count` | integer | Number of groups with balances |
+| `member_count` | integer | Number of members with balances |
 
 **Error Responses:**
 - `400 Bad Request` - Invalid user ID format
@@ -583,6 +644,159 @@ Remove a user from a group.
 - `400 Bad Request` - Invalid group member ID format
 - `404 Not Found` - Group member not found or unable to delete
 
+### Batch Group Member Operations
+
+Batch operations allow you to manage multiple group members atomically.
+
+#### Create Group Members (Batch)
+
+Add multiple users to a group in a single atomic operation.
+
+**Endpoint:** `POST /groups/{group_id}/members/batch`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+
+**Request Body:**
+```json
+{
+  "members": [
+    {
+      "user_id": 1
+    },
+    {
+      "user_id": 2
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `members` | array | Yes | Array of member objects |
+| `members[].user_id` | integer | No | User ID (nullable) |
+
+**Response:** `201 Created`
+```json
+{
+  "group": {
+    "id": 1,
+    "name": "Roommates"
+  },
+  "group_members": [
+    {
+      "id": 1,
+      "group_id": 1,
+      "member_name": "John Doe",
+      "user_id": 1,
+      "created_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": 2,
+      "group_id": 1,
+      "member_name": "Jane Smith",
+      "user_id": 2,
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 2
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `400 Bad Request` - At least one member is required
+
+#### Update Group Members (Batch)
+
+Replace all members of a group with a new set. This operation atomically deletes existing members and creates new ones.
+
+**Endpoint:** `PUT /groups/{group_id}/members/batch` or `PATCH /groups/{group_id}/members/batch`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+
+**Request Body:**
+```json
+{
+  "members": [
+    {
+      "user_id": 2
+    },
+    {
+      "user_id": 3
+    }
+  ]
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "group": {
+    "id": 1,
+    "name": "Roommates"
+  },
+  "deleted_members": [
+    {
+      "id": 1,
+      "group_id": 1,
+      "member_name": "John Doe",
+      "user_id": 1,
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "new_members": [
+    {
+      "id": 2,
+      "group_id": 1,
+      "member_name": "Jane Smith",
+      "user_id": 2,
+      "created_at": "2024-01-15T12:00:00Z"
+    },
+    {
+      "id": 3,
+      "group_id": 1,
+      "member_name": "Bob Johnson",
+      "user_id": 3,
+      "created_at": "2024-01-15T12:00:00Z"
+    }
+  ],
+  "deleted_count": 1,
+  "new_count": 2
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `400 Bad Request` - At least one member is required
+
+#### Delete All Group Members (Batch)
+
+Remove all members from a group in a single atomic operation.
+
+**Endpoint:** `DELETE /groups/{group_id}/members/batch`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+
+**Response:** `200 OK`
+```json
+{
+  "group_id": 1,
+  "message": "All group members deleted successfully"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid group ID format
+
 ---
 
 ## Transactions
@@ -1013,6 +1227,160 @@ Retrieve a paginated list of all splits.
 }
 ```
 
+### Batch Split Operations
+
+Batch operations ensure that splits always add up to 100% of the transaction amount. These are the recommended endpoints for managing splits.
+
+#### Create Splits for Transaction (Batch)
+
+Create multiple splits for a transaction atomically, ensuring they add up to 100%.
+
+**Endpoint:** `POST /splits/transaction/{transaction_id}/batch`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transaction_id` | integer | Yes | Transaction ID |
+
+**Request Body:**
+```json
+{
+  "splits": [
+    {
+      "split_percent": 0.50,
+      "split_amount": 62.75,
+      "split_user": 1
+    },
+    {
+      "split_percent": 0.50,
+      "split_amount": 62.75,
+      "split_user": 2
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `splits` | array | Yes | Array of split objects |
+| `splits[].split_percent` | decimal | Yes | Percentage of transaction amount (0.0 to 1.0) |
+| `splits[].split_amount` | decimal | Yes | Amount assigned to this split |
+| `splits[].split_user` | integer | No | User ID responsible for this split (nullable) |
+
+**Validation:**
+- ✅ All split percentages must sum to exactly 1.0 (100%)
+- ✅ All split amounts must sum to transaction amount (within 1 cent tolerance)
+- ✅ At least one split is required
+- ✅ Transaction must exist
+
+**Response:** `201 Created`
+```json
+{
+  "splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.500000",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": 2,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.500000",
+      "split_amount": "62.75",
+      "split_user": 2,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "message": "Successfully created 2 splits"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `400 Bad Request` - Split percentages must add up to 100%
+- `400 Bad Request` - Split amounts must add up to transaction amount
+- `400 Bad Request` - At least one split is required
+
+#### Update All Splits for Transaction (Batch)
+
+Atomically replace ALL existing splits with a new set. This operation ensures splits always add up to 100%.
+
+**Endpoint:** `PUT /splits/transaction/{transaction_id}/batch` or `PATCH /splits/transaction/{transaction_id}/batch`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transaction_id` | integer | Yes | Transaction ID |
+
+**Request Body:**
+```json
+{
+  "splits": [
+    {
+      "split_percent": 0.333333,
+      "split_amount": 33.33,
+      "split_user": 1
+    },
+    {
+      "split_percent": 0.333333,
+      "split_amount": 33.33,
+      "split_user": 2
+    },
+    {
+      "split_percent": 0.333334,
+      "split_amount": 33.34,
+      "split_user": 3
+    }
+  ]
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "deleted_splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.500000",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "new_splits": [
+    {
+      "id": 2,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.333333",
+      "split_amount": "33.33",
+      "split_user": 1,
+      "created_at": "2024-01-15T12:00:00Z",
+      "modified_at": "2024-01-15T12:00:00Z"
+    }
+  ],
+  "message": "Successfully replaced 1 splits with 1 new splits"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `400 Bad Request` - Split percentages must add up to 100%
+- `400 Bad Request` - Split amounts must add up to transaction amount
+- `400 Bad Request` - At least one split is required
+
+**Note:** See [SPLIT_API_GUIDE.md](Documentation/SPLIT_API_GUIDE.md) for detailed information on safe split management.
+
 ### List Splits by Transaction (Nested Route)
 
 Retrieve all splits for a specific transaction using the nested route.
@@ -1049,6 +1417,8 @@ Retrieve all splits for a specific transaction using the nested route.
 - `400 Bad Request` - Invalid transaction ID format
 
 ### Create Split (Nested Route)
+
+⚠️ **Warning:** Creating individual splits can leave transactions in an invalid state. Use batch operations (`POST /splits/transaction/{transaction_id}/batch`) instead.
 
 Create a new split for a transaction using the nested route.
 
@@ -1200,6 +1570,8 @@ Retrieve a specific split by its ID.
 
 ### Create Split (Direct Access)
 
+⚠️ **Warning:** Creating individual splits can leave transactions in an invalid state. Use batch operations (`POST /splits/transaction/{transaction_id}/batch`) instead.
+
 Create a new split for a transaction using direct access route.
 
 **Endpoint:** `POST /splits/`
@@ -1239,6 +1611,8 @@ Create a new split for a transaction using direct access route.
 - `400 Bad Request` - Invalid JSON or missing required fields
 
 ### Update Split
+
+⚠️ **Warning:** Updating individual splits can leave transactions in an invalid state. Use batch operations (`PUT /splits/transaction/{transaction_id}/batch`) instead.
 
 Update an existing split.
 
@@ -1284,6 +1658,8 @@ Update an existing split.
 
 ### Delete Split
 
+⚠️ **Warning:** Deleting individual splits can leave transactions in an invalid state. Use batch operations (`PUT /splits/transaction/{transaction_id}/batch`) to replace all splits instead.
+
 Delete a split from the system.
 
 **Endpoint:** `DELETE /splits/{id}`
@@ -1310,6 +1686,8 @@ Delete a split from the system.
 **Error Responses:**
 - `400 Bad Request` - Invalid split ID format
 - `404 Not Found` - Split not found or unable to delete
+
+**Note:** For safe split management, see [SPLIT_API_GUIDE.md](Documentation/SPLIT_API_GUIDE.md)
 
 ---
 

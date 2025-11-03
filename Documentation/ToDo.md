@@ -5,14 +5,15 @@
 - ~~Troubleshoot balances endpoint reports missing user data~~
 - ~~Add nested route under splits/transaction/{tx_id}/batch to create splits for a transaction without needing to pass tx_id in body.~~
 - ~~Implement Simplified debts logic into balances endpoint~~
-- Implement User level (group agnostic) balance and debts reporting logic
-- Refactor API handlers to DRY?
-- Update API route docs
+- ~~Implement User level (group agnostic) balance and debts reporting logic~~
+- ~~Refactor API handlers to DRY?~~
+- ~~Update API route docs~~
 - ~~Update error messaging when DB does not return result (404 or 500)~~
 - ~~Create transaction to add multiple group members at once~~
 - Update IDs to use designated preface -> revisit much later.
 - ~~Generate transaction for adding all splits for a transaction at once~~
     - Add function to calculte % or $ amount if missing from API request 
+    - Validate splits round correctly (i.e. $100 over 3 users results in one split of $33.34 / 33.34%)
 - ~~Implement logging middleware for all endpoints~~
 - Build out testing
     - Testify

@@ -80,8 +80,15 @@ Controls log format:
 
 **Example text format**:
 ```
-time=2025-10-20T14:30:00.000Z level=INFO msg="User created successfully" user_id=123 name=John
+2025-10-20 14:30:00.000 INFO  [user.go:136] User created successfully name=John
 ```
+
+The text format includes:
+- Timestamp (YYYY-MM-DD HH:MM:SS.mmm)
+- Log level (DEBUG/INFO/WARN/ERROR, padded to 5 chars)
+- Source location (file:line) - only when LOG_LEVEL=debug
+- Message
+- Key-value attributes
 
 **Example JSON format**:
 ```json
@@ -255,27 +262,40 @@ Handler: logger.HTTPMiddleware(mux)
 
 ### Request Logging
 
-For each request, the middleware logs:
+For each request, the middleware logs at DEBUG level:
 
 ```
-level=INFO msg="incoming request" method=POST path=/users remote_addr=127.0.0.1:12345 user_agent="curl/7.68.0"
+level=DEBUG msg="incoming request" method=POST path=/users remote_addr=127.0.0.1:12345 user_agent="curl/7.68.0"
 ```
 
 ### Response Logging
 
-After processing, the middleware logs:
+After processing, the middleware logs at appropriate levels:
 
+**Successful requests (2xx):**
 ```
-level=INFO msg="request completed" method=POST path=/users status=201 duration=15ms bytes=124
+level=DEBUG msg="request completed" method=POST path=/users status=201 duration=15ms bytes=124
+```
+
+**Client errors (4xx):**
+```
+level=WARN msg="request completed" method=POST path=/users status=400 duration=5ms bytes=45
+```
+
+**Server errors (5xx):**
+```
+level=ERROR msg="request completed" method=POST path=/users status=500 duration=120ms bytes=0
 ```
 
 ### Error Responses
 
 Failed requests are logged at appropriate levels:
 
+- **2xx/3xx responses** → `DEBUG` level (successful requests)
 - **4xx errors** (client errors) → `WARN` level
 - **5xx errors** (server errors) → `ERROR` level
-- **2xx/3xx responses** → `INFO` level
+
+**Note:** Incoming requests are always logged at `DEBUG` level. The log level for completed requests depends on the status code. This means successful requests will only appear in logs when `LOG_LEVEL=debug`.
 
 ## Best Practices
 
