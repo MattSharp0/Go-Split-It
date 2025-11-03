@@ -54,7 +54,6 @@ type Querier interface {
 	UserBalancesByGroup(ctx context.Context, userID *int64) ([]UserBalancesByGroupRow, error)
 	UserBalancesByMember(ctx context.Context, userID *int64) ([]UserBalancesByMemberRow, error)
 	UserBalancesSummary(ctx context.Context, userID *int64) (UserBalancesSummaryRow, error)
-	getTransactionsByGroup(ctx context.Context, arg getTransactionsByGroupParams) ([]Transaction, error)
 }
 
 var _ Querier = (*Queries)(nil)

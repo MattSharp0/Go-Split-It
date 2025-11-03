@@ -43,15 +43,6 @@ ORDER BY transaction_date desc
 LIMIT $2
 OFFSET $3;
 
--- name: getTransactionsByGroup :many
-SELECT 
-    *
-FROM "transactions"
-WHERE group_id = $1
-ORDER BY transaction_date desc
-LIMIT $2
-OFFSET $3;
-
 -- name: GetTransactionsByGroupInPeriod :many
 SELECT 
     *
