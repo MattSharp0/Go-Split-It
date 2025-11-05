@@ -147,6 +147,27 @@ func TestSimplifyDebts(t *testing.T) {
 			},
 		},
 		{
+			name: "complex multi-person debt 2",
+			balances: []*models.NetBalance{
+				{UserID: 1, NetBalance: decimal.NewFromInt(-100)},
+				{UserID: 2, NetBalance: decimal.NewFromInt(25)},
+				{UserID: 3, NetBalance: decimal.NewFromInt(50)},
+				{UserID: 4, NetBalance: decimal.NewFromInt(25)},
+			},
+			expectError: false,
+			validate: func(t *testing.T, payments []models.BalancePayment) {
+				// Verify we have at least one payment
+				require.GreaterOrEqual(t, len(payments), 1)
+				totalAmount := decimal.Zero
+				for _, p := range payments {
+					totalAmount = totalAmount.Add(p.Amount)
+					assert.True(t, p.Amount.IsPositive(), "Payment amount should be positive")
+				}
+				// Total should equal the positive balance (100)
+				assert.True(t, totalAmount.Equal(decimal.NewFromInt(100)), "Total should be at least 100")
+			},
+		},
+		{
 			name: "non-zero sum error",
 			balances: []*models.NetBalance{
 				{UserID: 1, NetBalance: decimal.NewFromInt(100)},
