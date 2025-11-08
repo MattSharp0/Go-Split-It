@@ -7,6 +7,7 @@ import (
 	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/auth"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
@@ -120,6 +121,14 @@ func getGroupByID(store db.Store) http.HandlerFunc {
 
 func createGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Decode request body
 		var createGroupReq models.CreateGroupRequest
 		if err := DecodeJSONBody(r, &createGroupReq); err != nil {
@@ -133,7 +142,7 @@ func createGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		logger.Debug("Creating group", slog.String("name", createGroupReq.Name))
+		logger.Debug("Creating group", slog.String("name", createGroupReq.Name), slog.Int64("user_id", userID))
 
 		// Create group in database
 		group, err := store.CreateGroup(context.Background(), createGroupReq.Name)
@@ -141,6 +150,19 @@ func createGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 		logger.Debug("Group created successfully", slog.Int64("group_id", group.ID), slog.String("name", group.Name))
+
+		// Automatically add creator as group member
+		userIDPtr := &userID
+		_, err = store.CreateGroupMember(context.Background(), db.CreateGroupMemberParams{
+			GroupID: group.ID,
+			UserID:  userIDPtr,
+		})
+		if err != nil {
+			logger.Error("Failed to add creator as group member", "error", err, "group_id", group.ID, "user_id", userID)
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+		logger.Debug("Creator added as group member", slog.Int64("group_id", group.ID), slog.Int64("user_id", userID))
 
 		// Convert to response format
 		groupResponse := models.GroupResponse{
@@ -158,9 +180,23 @@ func createGroup(store db.Store) http.HandlerFunc {
 
 func updateGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "Group ID is required")
 		if !ok {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, id, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
 			return
 		}
 
@@ -177,7 +213,7 @@ func updateGroup(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		logger.Debug("Updating group", "group_id", id, "new_name", updateGroupReq.Name)
+		logger.Debug("Updating group", "group_id", id, "new_name", updateGroupReq.Name, "user_id", userID)
 
 		// Update group in database
 		group, err := store.UpdateGroup(context.Background(), db.UpdateGroupParams{
@@ -204,13 +240,27 @@ func updateGroup(store db.Store) http.HandlerFunc {
 
 func deleteGroup(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "Group ID is required")
 		if !ok {
 			return
 		}
 
-		logger.Debug("Deleting group", "group_id", id)
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, id, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
+			return
+		}
+
+		logger.Debug("Deleting group", "group_id", id, "user_id", userID)
 
 		// Delete group from database
 		group, err := store.DeleteGroup(context.Background(), id)
@@ -296,9 +346,23 @@ func listGroupMembers(store db.Store) http.HandlerFunc {
 // POST /groups/{group_id}/members
 func createGroupMemberNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {group_id} from path parameter
 		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
 		if !ok {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, groupID, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
 			return
 		}
 
@@ -312,7 +376,7 @@ func createGroupMemberNested(store db.Store) http.HandlerFunc {
 		// Override group_id from URL
 		createGroupMemberReq.GroupID = groupID
 
-		logger.Debug("Creating group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID)
+		logger.Debug("Creating group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID, "requester_user_id", userID)
 
 		// Create group member in database
 		groupMember, err := store.CreateGroupMember(context.Background(), db.CreateGroupMemberParams{
@@ -427,9 +491,23 @@ func getTransactionsByGroupNested(store db.Store) http.HandlerFunc {
 // POST /groups/{group_id}/transactions
 func createTransactionNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {group_id} from path parameter
 		groupID, ok := ParsePathInt64(w, r, "group_id", "Group ID is required")
 		if !ok {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, groupID, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
 			return
 		}
 
@@ -453,7 +531,22 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		logger.Debug("Creating transaction", slog.String("name", createTransactionReq.Name), slog.Int64("group_id", createTransactionReq.GroupID))
+		// Verify ByUser is a group member (it should be a group_member ID, but we should verify it's in this group)
+		// Note: ByUser is a group_member ID, not a user ID
+		// We'll need to verify that the group_member belongs to this group
+		groupMember, err := store.GetGroupMemberByID(context.Background(), createTransactionReq.ByUser)
+		if err != nil {
+			logger.Warn("Group member not found for ByUser", "by_user", createTransactionReq.ByUser)
+			http.Error(w, "Group member not found", http.StatusBadRequest)
+			return
+		}
+		if groupMember.GroupID != groupID {
+			logger.Warn("Group member does not belong to this group", "by_user", createTransactionReq.ByUser, "group_id", groupID)
+			http.Error(w, "Group member does not belong to this group", http.StatusBadRequest)
+			return
+		}
+
+		logger.Debug("Creating transaction", slog.String("name", createTransactionReq.Name), slog.Int64("group_id", createTransactionReq.GroupID), slog.Int64("user_id", userID))
 
 		// Create transaction in database
 		transaction, err := store.CreateTransaction(context.Background(), db.CreateTransactionParams{

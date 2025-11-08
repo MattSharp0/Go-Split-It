@@ -179,6 +179,26 @@ func (q *Queries) ListGroupMembersByGroupID(ctx context.Context, arg ListGroupMe
 	return items, nil
 }
 
+const unlinkGroupMember = `-- name: UnlinkGroupMember :one
+UPDATE group_members
+SET user_id = NULL
+WHERE id = $1
+RETURNING id, group_id, member_name, user_id, created_at
+`
+
+func (q *Queries) UnlinkGroupMember(ctx context.Context, id int64) (GroupMember, error) {
+	row := q.db.QueryRow(ctx, unlinkGroupMember, id)
+	var i GroupMember
+	err := row.Scan(
+		&i.ID,
+		&i.GroupID,
+		&i.MemberName,
+		&i.UserID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const updateGroupMember = `-- name: UpdateGroupMember :one
 UPDATE group_members
 SET group_id = $1, user_id = $2

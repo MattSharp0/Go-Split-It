@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/auth"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
@@ -121,6 +122,14 @@ func getGroupMemberByID(store db.Store) http.HandlerFunc {
 
 func createGroupMember(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Decode request body
 		var createGroupMemberReq models.CreateGroupMemberRequest
 		if err := DecodeJSONBody(r, &createGroupMemberReq); err != nil {
@@ -134,7 +143,13 @@ func createGroupMember(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		logger.Debug("Creating group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID)
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, createGroupMemberReq.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
+			return
+		}
+
+		logger.Debug("Creating group member", "group_id", createGroupMemberReq.GroupID, "user_id", createGroupMemberReq.UserID, "requester_user_id", userID)
 
 		// Create group member in database
 		groupMember, err := store.CreateGroupMember(context.Background(), db.CreateGroupMemberParams{
@@ -165,9 +180,29 @@ func createGroupMember(store db.Store) http.HandlerFunc {
 
 func updateGroupMember(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "Group Member ID is required")
 		if !ok {
+			return
+		}
+
+		// Get group member to find its group
+		groupMemberRow, err := store.GetGroupMemberByID(context.Background(), id)
+		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to get group member by ID", "group_member_id", id) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, groupMemberRow.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
 			return
 		}
 
@@ -184,7 +219,7 @@ func updateGroupMember(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		logger.Debug("Updating group member", "group_member_id", id, "group_id", updateGroupMemberReq.GroupID, "user_id", updateGroupMemberReq.UserID)
+		logger.Debug("Updating group member", "group_member_id", id, "group_id", updateGroupMemberReq.GroupID, "user_id", updateGroupMemberReq.UserID, "requester_user_id", userID)
 
 		// Update group member in database
 		groupMember, err := store.UpdateGroupMember(context.Background(), db.UpdateGroupMemberParams{
@@ -215,17 +250,38 @@ func updateGroupMember(store db.Store) http.HandlerFunc {
 
 func deleteGroupMember(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "Group Member ID is required")
 		if !ok {
 			return
 		}
 
-		logger.Debug("Deleting group member", "group_member_id", id)
+		// Get group member to find its group
+		groupMemberRow, err := store.GetGroupMemberByID(context.Background(), id)
+		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to get group member by ID", "group_member_id", id) {
+			return
+		}
 
-		// Delete group member from database
-		groupMember, err := store.DeleteGroupMember(context.Background(), id)
-		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to delete group member", "group_member_id", id) {
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, groupMemberRow.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: you must be a member of this group", http.StatusForbidden)
+			return
+		}
+
+		logger.Debug("Unlinking group member", "group_member_id", id, "user_id", userID)
+
+		// Unlink group member (set user_id to NULL instead of deleting)
+		// This preserves the group_member record and member_name
+		groupMember, err := store.UnlinkGroupMember(context.Background(), id)
+		if HandleDBError(w, err, "Group member not found", "An error has occurred", "Failed to unlink group member", "group_member_id", id) {
 			return
 		}
 
@@ -234,11 +290,11 @@ func deleteGroupMember(store db.Store) http.HandlerFunc {
 			ID:         groupMember.ID,
 			GroupID:    groupMember.GroupID,
 			MemberName: groupMember.MemberName,
-			UserID:     groupMember.UserID,
+			UserID:     groupMember.UserID, // This will be NULL after unlinking
 			CreatedAt:  groupMember.CreatedAt,
 		}
 
-		// Send response with deleted group member data
+		// Send response with unlinked group member data
 		if err := WriteJSONResponseOK(w, groupMemberResponse); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return

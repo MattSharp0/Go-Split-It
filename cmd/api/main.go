@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/auth"
 	"github.com/MattSharp0/transaction-split-go/internal/handlers"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
@@ -69,16 +70,19 @@ func main() {
 	// Initialize server with logger
 	s := server.NewServer(":8080", store, log)
 
+	// Public routes
 	s.Mux().HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Hello, World!"))
 	})
+	s.Mux().Handle("/auth/", http.StripPrefix("/auth", handlers.AuthRoutes(s, store)))
 
-	s.Mux().Handle("/users/", http.StripPrefix("/users", handlers.UserRoutes(s, store)))
-	s.Mux().Handle("/groups/", http.StripPrefix("/groups", handlers.GroupRoutes(s, store)))
-	s.Mux().Handle("/group_members/", http.StripPrefix("/group_members", handlers.GroupMemberRoutes(s, store)))
-	s.Mux().Handle("/transactions/", http.StripPrefix("/transactions", handlers.TransactionRoutes(s, store)))
-	s.Mux().Handle("/splits/", http.StripPrefix("/splits", handlers.SplitRoutes(s, store)))
+	// Protected routes - require authentication
+	s.Mux().Handle("/users/", auth.RequireAuth(http.StripPrefix("/users", handlers.UserRoutes(s, store))))
+	s.Mux().Handle("/groups/", auth.RequireAuth(http.StripPrefix("/groups", handlers.GroupRoutes(s, store))))
+	s.Mux().Handle("/group_members/", auth.RequireAuth(http.StripPrefix("/group_members", handlers.GroupMemberRoutes(s, store))))
+	s.Mux().Handle("/transactions/", auth.RequireAuth(http.StripPrefix("/transactions", handlers.TransactionRoutes(s, store))))
+	s.Mux().Handle("/splits/", auth.RequireAuth(http.StripPrefix("/splits", handlers.SplitRoutes(s, store))))
 
 	// Start server in goroutine
 	if err := s.Start(); err != nil {

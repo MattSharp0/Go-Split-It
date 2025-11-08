@@ -32,6 +32,12 @@ SET group_id = $1, user_id = $2
 WHERE id = $3
 RETURNING *;    
 
+-- name: UnlinkGroupMember :one
+UPDATE group_members
+SET user_id = NULL
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteGroupMember :one
 DELETE FROM group_members
 WHERE id = $1

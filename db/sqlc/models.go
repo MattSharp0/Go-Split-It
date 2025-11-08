@@ -61,10 +61,13 @@ type Transaction struct {
 }
 
 type User struct {
-	ID         int64     `json:"id"`
-	Name       string    `json:"name"`
-	CreatedAt  time.Time `json:"created_at"`
-	ModifiedAt time.Time `json:"modified_at"`
+	ID            int64     `json:"id"`
+	Name          string    `json:"name"`
+	CreatedAt     time.Time `json:"created_at"`
+	ModifiedAt    time.Time `json:"modified_at"`
+	Email         string    `json:"email"`
+	PasswordHash  string    `json:"password_hash"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 type UserBalancesByMember struct {

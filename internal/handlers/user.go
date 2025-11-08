@@ -7,6 +7,7 @@ import (
 	"time"
 
 	db "github.com/MattSharp0/transaction-split-go/db/sqlc"
+	"github.com/MattSharp0/transaction-split-go/internal/auth"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/MattSharp0/transaction-split-go/internal/server"
@@ -164,9 +165,23 @@ func createUser(store db.Store) http.HandlerFunc {
 
 func updateUser(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		authenticatedUserID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "User ID is required")
 		if !ok {
+			return
+		}
+
+		// Verify user can only update their own account
+		if err := auth.CheckOwnUser(authenticatedUserID, id); err != nil {
+			http.Error(w, "Forbidden: cannot update another user's account", http.StatusForbidden)
 			return
 		}
 
@@ -215,9 +230,23 @@ func updateUser(store db.Store) http.HandlerFunc {
 
 func deleteUser(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		authenticatedUserID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "User ID is required")
 		if !ok {
+			return
+		}
+
+		// Verify user can only delete their own account
+		if err := auth.CheckOwnUser(authenticatedUserID, id); err != nil {
+			http.Error(w, "Forbidden: cannot delete another user's account", http.StatusForbidden)
 			return
 		}
 
@@ -343,17 +372,31 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 // GET /users/{user_id}/balances
 func getUserBalances(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		authenticatedUserID, ok := auth.GetUserID(r.Context())
+		if !ok {
+			logger.Warn("User ID not found in context")
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// Extract {user_id} from path parameter
-		userID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
+		pathUserID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
 		if !ok {
 			return
 		}
 
-		logger.Debug("Getting balances for user", "user_id", userID)
+		// Verify user can only access their own balances
+		if err := auth.CheckOwnUser(authenticatedUserID, pathUserID); err != nil {
+			http.Error(w, "Forbidden: cannot access another user's balances", http.StatusForbidden)
+			return
+		}
+
+		logger.Debug("Getting balances for user", "user_id", pathUserID)
 
 		// Get summary
-		summaryRow, err := store.UserBalancesSummary(context.Background(), &userID)
-		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user balances summary", "user_id", userID) {
+		summaryRow, err := store.UserBalancesSummary(context.Background(), &pathUserID)
+		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user balances summary", "user_id", pathUserID) {
 			return
 		}
 
@@ -370,8 +413,8 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		// Get balances by group
-		balancesByGroupRows, err := store.UserBalancesByGroup(context.Background(), &userID)
-		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by group", "user_id", userID) {
+		balancesByGroupRows, err := store.UserBalancesByGroup(context.Background(), &pathUserID)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by group", "user_id", pathUserID) {
 			return
 		}
 
@@ -394,8 +437,8 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		// Get balances by member
-		balancesByMemberRows, err := store.UserBalancesByMember(context.Background(), &userID)
-		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by member", "user_id", userID) {
+		balancesByMemberRows, err := store.UserBalancesByMember(context.Background(), &pathUserID)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by member", "user_id", pathUserID) {
 			return
 		}
 
@@ -422,7 +465,7 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		response := models.UserBalancesResponse{
-			UserID:           userID,
+			UserID:           pathUserID,
 			Summary:          summary,
 			BalancesByGroup:  balancesByGroup,
 			BalancesByMember: balancesByMember,

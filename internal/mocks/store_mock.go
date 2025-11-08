@@ -48,12 +48,22 @@ func (m *MockStore) CreateUser(ctx context.Context, name string) (db.User, error
 	return args.Get(0).(db.User), args.Error(1)
 }
 
+func (m *MockStore) CreateUserWithAuth(ctx context.Context, arg db.CreateUserWithAuthParams) (db.User, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(db.User), args.Error(1)
+}
+
 func (m *MockStore) DeleteGroup(ctx context.Context, id int64) (db.Group, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(db.Group), args.Error(1)
 }
 
 func (m *MockStore) DeleteGroupMember(ctx context.Context, id int64) (db.GroupMember, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(db.GroupMember), args.Error(1)
+}
+
+func (m *MockStore) UnlinkGroupMember(ctx context.Context, id int64) (db.GroupMember, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(db.GroupMember), args.Error(1)
 }
@@ -174,6 +184,11 @@ func (m *MockStore) GetTransactionsByUserInPeriod(ctx context.Context, arg db.Ge
 
 func (m *MockStore) GetUserByID(ctx context.Context, id int64) (db.User, error) {
 	args := m.Called(ctx, id)
+	return args.Get(0).(db.User), args.Error(1)
+}
+
+func (m *MockStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
+	args := m.Called(ctx, email)
 	return args.Get(0).(db.User), args.Error(1)
 }
 
