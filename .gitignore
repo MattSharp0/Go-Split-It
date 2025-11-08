@@ -6,6 +6,9 @@
 ROUTE_ORDERING.md
 SPLIT_API_GUIDE.md
 
+# Backups
+backup.sql
+
 # Go build artifacts
 *.test
 *.test.exe
