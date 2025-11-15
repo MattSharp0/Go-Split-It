@@ -17,3 +17,8 @@ coverage.html
 
 # VS Code
 .vscode/settings.json
+.DS_Store
+
+
+# API Testing
+Go-Split-It.postman_collection.json
