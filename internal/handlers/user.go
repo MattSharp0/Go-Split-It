@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -53,7 +52,7 @@ func listUsers(store db.Store) http.HandlerFunc {
 			slog.Int("offset", int(listuserparams.Offset)),
 		)
 
-		users, err := store.ListUsers(context.Background(), listuserparams)
+		users, err := store.ListUsers(r.Context(), listuserparams)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to list users", "limit", listuserparams.Limit, "offset", listuserparams.Offset) {
 			return
 		}
@@ -97,7 +96,7 @@ func getUserByID(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting user by ID", "user_id", id)
 
 		// Get user from database
-		user, err := store.GetUserByID(context.Background(), id)
+		user, err := store.GetUserByID(r.Context(), id)
 		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user by ID", "user_id", id) {
 			return
 		}
@@ -137,7 +136,7 @@ func createUser(store db.Store) http.HandlerFunc {
 		logger.Info("Creating user", slog.String("name", createUserReq.Name))
 
 		// Create user in database
-		user, err := store.CreateUser(context.Background(), createUserReq.Name)
+		user, err := store.CreateUser(r.Context(), createUserReq.Name)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to create user", "name", createUserReq.Name) {
 			return
 		}
@@ -166,10 +165,8 @@ func createUser(store db.Store) http.HandlerFunc {
 func updateUser(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		authenticatedUserID, ok := auth.GetUserID(r.Context())
+		authenticatedUserID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -202,7 +199,7 @@ func updateUser(store db.Store) http.HandlerFunc {
 		logger.Debug("Updating user", "user_id", id, "new_name", updateUserReq.Name)
 
 		// Update user in database
-		user, err := store.UpdateUser(context.Background(), db.UpdateUserParams{
+		user, err := store.UpdateUser(r.Context(), db.UpdateUserParams{
 			ID:   id,
 			Name: updateUserReq.Name,
 		})
@@ -231,10 +228,8 @@ func updateUser(store db.Store) http.HandlerFunc {
 func deleteUser(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		authenticatedUserID, ok := auth.GetUserID(r.Context())
+		authenticatedUserID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -253,7 +248,7 @@ func deleteUser(store db.Store) http.HandlerFunc {
 		logger.Debug("Deleting user", "user_id", id)
 
 		// Delete user from database
-		user, err := store.DeleteUser(context.Background(), id)
+		user, err := store.DeleteUser(r.Context(), id)
 		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to delete user", "user_id", id) {
 			return
 		}
@@ -329,7 +324,7 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 			"offset", listParams.Offset,
 		)
 
-		transactions, err := store.GetTransactionsByUserInPeriod(context.Background(), listParams)
+		transactions, err := store.GetTransactionsByUserInPeriod(r.Context(), listParams)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to get transactions by user", "user_id", userID) {
 			return
 		}
@@ -373,10 +368,8 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 func getUserBalances(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		authenticatedUserID, ok := auth.GetUserID(r.Context())
+		authenticatedUserID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -395,7 +388,7 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting balances for user", "user_id", pathUserID)
 
 		// Get summary
-		summaryRow, err := store.UserBalancesSummary(context.Background(), &pathUserID)
+		summaryRow, err := store.UserBalancesSummary(r.Context(), &pathUserID)
 		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user balances summary", "user_id", pathUserID) {
 			return
 		}
@@ -413,7 +406,7 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		// Get balances by group
-		balancesByGroupRows, err := store.UserBalancesByGroup(context.Background(), &pathUserID)
+		balancesByGroupRows, err := store.UserBalancesByGroup(r.Context(), &pathUserID)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by group", "user_id", pathUserID) {
 			return
 		}
@@ -437,7 +430,7 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		// Get balances by member
-		balancesByMemberRows, err := store.UserBalancesByMember(context.Background(), &pathUserID)
+		balancesByMemberRows, err := store.UserBalancesByMember(r.Context(), &pathUserID)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by member", "user_id", pathUserID) {
 			return
 		}

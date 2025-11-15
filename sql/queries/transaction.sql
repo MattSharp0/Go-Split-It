@@ -71,6 +71,16 @@ ORDER BY transaction_date desc
 LIMIT $1
 OFFSET $2;
 
+-- name: ListTransactionsByUserGroups :many
+SELECT 
+    t.* 
+FROM "transactions" t
+INNER JOIN group_members gm ON t.group_id = gm.group_id
+WHERE gm.user_id = $1
+ORDER BY t.transaction_date desc
+LIMIT $2
+OFFSET $3;
+
 -- name: UpdateTransaction :one
 UPDATE "transactions"
 SET

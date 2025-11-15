@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
@@ -62,7 +61,7 @@ func register(store db.Store) http.HandlerFunc {
 		}
 
 		// Create user
-		user, err := store.CreateUserWithAuth(context.Background(), db.CreateUserWithAuthParams{
+		user, err := store.CreateUserWithAuth(r.Context(), db.CreateUserWithAuthParams{
 			Name:         req.Name,
 			Email:        req.Email,
 			PasswordHash: passwordHash,
@@ -131,7 +130,7 @@ func login(store db.Store) http.HandlerFunc {
 		logger.Debug("Login attempt", slog.String("email", req.Email))
 
 		// Get user by email
-		user, err := store.GetUserByEmail(context.Background(), req.Email)
+		user, err := store.GetUserByEmail(r.Context(), req.Email)
 		if err != nil {
 			logger.Warn("Login failed: user not found", "email", req.Email)
 			http.Error(w, "Invalid email or password", http.StatusUnauthorized)
@@ -180,17 +179,15 @@ func login(store db.Store) http.HandlerFunc {
 
 func getMe(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		logger.Debug("Getting current user", "user_id", userID)
 
 		// Get user from database
-		user, err := store.GetUserByID(context.Background(), userID)
+		user, err := store.GetUserByID(r.Context(), userID)
 		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user by ID", "user_id", userID) {
 			return
 		}

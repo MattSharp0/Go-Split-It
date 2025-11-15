@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/MattSharp0/transaction-split-go/internal/auth"
 	"github.com/MattSharp0/transaction-split-go/internal/logger"
 )
 
@@ -117,4 +118,17 @@ func WriteJSONResponseCreated(w http.ResponseWriter, data interface{}) error {
 // WriteJSONResponseOK is a convenience function that writes a JSON response with 200 OK status.
 func WriteJSONResponseOK(w http.ResponseWriter, data interface{}) error {
 	return WriteJSONResponse(w, http.StatusOK, data)
+}
+
+// GetAuthenticatedUserID extracts the authenticated user ID from the request context.
+// Returns the user ID and true if successful. On error, writes an HTTP error response
+// and returns false (caller should return immediately).
+func GetAuthenticatedUserID(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		logger.Warn("User ID not found in context")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return 0, false
+	}
+	return userID, true
 }

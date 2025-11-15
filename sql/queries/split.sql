@@ -55,6 +55,15 @@ LIMIT $2
 OFFSET $3
 FOR UPDATE;
 
+-- name: GetSplitsByUserFiltered :many
+SELECT s.* FROM "splits" s
+INNER JOIN transactions t ON s.transaction_id = t.id
+INNER JOIN group_members gm ON t.group_id = gm.group_id
+WHERE s.split_user = $1 AND gm.user_id = $2
+ORDER BY s.created_at desc
+LIMIT $3
+OFFSET $4;
+
 -- name: ListSplits :many
 SELECT 
     * 
@@ -62,6 +71,17 @@ FROM "splits"
 ORDER BY transaction_id, created_at desc
 LIMIT $1
 OFFSET $2;
+
+-- name: ListSplitsByUserGroups :many
+SELECT 
+    s.* 
+FROM "splits" s
+INNER JOIN transactions t ON s.transaction_id = t.id
+INNER JOIN group_members gm ON t.group_id = gm.group_id
+WHERE gm.user_id = $1
+ORDER BY s.transaction_id, s.created_at desc
+LIMIT $2
+OFFSET $3;
 
 -- name: ListSplitsForTransaction :many
 SELECT 

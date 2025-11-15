@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -42,6 +41,12 @@ func SplitRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 func listSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Parse query parameters
 		limit, offset, err := ParseLimitOffset(r)
 		if err != nil {
@@ -49,13 +54,14 @@ func listSplits(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		var listSplitParams db.ListSplitsParams
+		var listSplitParams db.ListSplitsByUserGroupsParams
+		listSplitParams.UserID = &userID
 		listSplitParams.Limit = limit
 		listSplitParams.Offset = offset
 
 		logger.Debug("Listing splits", "limit", listSplitParams.Limit, "offset", listSplitParams.Offset)
 
-		splits, err := store.ListSplits(context.Background(), listSplitParams)
+		splits, err := store.ListSplitsByUserGroups(r.Context(), listSplitParams)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to list splits", "limit", listSplitParams.Limit, "offset", listSplitParams.Offset) {
 			return
 		}
@@ -92,15 +98,33 @@ func listSplits(store db.Store) http.HandlerFunc {
 
 func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {transaction_id} from path parameter
 		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
 		if !ok {
 			return
 		}
 
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), transactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", transactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
+			return
+		}
+
 		logger.Debug("Getting splits for transaction", "transaction_id", transactionID)
 
-		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
+		splits, err := store.GetSplitsByTransactionID(r.Context(), transactionID)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by transaction ID", "transaction_id", transactionID) {
 			return
 		}
@@ -137,6 +161,12 @@ func getSplitsByTransactionID(store db.Store) http.HandlerFunc {
 
 func getSplitsByUser(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		authenticatedUserID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {user_id} from path parameter
 		userID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
 		if !ok {
@@ -150,14 +180,15 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		var listParams db.GetSplitsByUserParams
+		var listParams db.GetSplitsByUserFilteredParams
 		listParams.SplitUser = &userID
+		listParams.UserID = &authenticatedUserID
 		listParams.Limit = limit
 		listParams.Offset = offset
 
 		logger.Debug("Getting splits for user", "user_id", userID, "limit", listParams.Limit, "offset", listParams.Offset)
 
-		splits, err := store.GetSplitsByUser(context.Background(), listParams)
+		splits, err := store.GetSplitsByUserFiltered(r.Context(), listParams)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by user", "user_id", userID) {
 			return
 		}
@@ -194,6 +225,12 @@ func getSplitsByUser(store db.Store) http.HandlerFunc {
 
 func getSplitByID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "Split ID is required")
 		if !ok {
@@ -203,8 +240,20 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting split by ID", "split_id", id)
 
 		// Get split from database
-		split, err := store.GetSplitByID(context.Background(), id)
+		split, err := store.GetSplitByID(r.Context(), id)
 		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to get split by ID", "split_id", id) {
+			return
+		}
+
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), split.TransactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction", "transaction_id", split.TransactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
 			return
 		}
 
@@ -231,10 +280,8 @@ func getSplitByID(store db.Store) http.HandlerFunc {
 func createSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -252,7 +299,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 		}
 
 		// Get transaction to find its group
-		transaction, err := store.GetTransactionByID(context.Background(), createSplitReq.TransactionID)
+		transaction, err := store.GetTransactionByID(r.Context(), createSplitReq.TransactionID)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", createSplitReq.TransactionID) {
 			return
 		}
@@ -265,7 +312,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 
 		// Verify split_user is a group member if provided
 		if createSplitReq.SplitUser != nil {
-			groupMember, err := store.GetGroupMemberByID(context.Background(), *createSplitReq.SplitUser)
+			groupMember, err := store.GetGroupMemberByID(r.Context(), *createSplitReq.SplitUser)
 			if err != nil || groupMember.GroupID != transaction.GroupID {
 				logger.Warn("Split user is not a member of this group", "split_user", *createSplitReq.SplitUser, "group_id", transaction.GroupID)
 				http.Error(w, "Split user must be a member of the transaction's group", http.StatusBadRequest)
@@ -276,7 +323,7 @@ func createSplit(store db.Store) http.HandlerFunc {
 		logger.Debug("Creating split", "transaction_id", createSplitReq.TransactionID, "user_id", userID)
 
 		// Create split in database
-		split, err := store.CreateSplit(context.Background(), db.CreateSplitParams{
+		split, err := store.CreateSplit(r.Context(), db.CreateSplitParams{
 			TransactionID: createSplitReq.TransactionID,
 			SplitPercent:  createSplitReq.SplitPercent,
 			SplitAmount:   createSplitReq.SplitAmount,
@@ -313,10 +360,8 @@ func createSplit(store db.Store) http.HandlerFunc {
 func updateSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -327,13 +372,13 @@ func updateSplit(store db.Store) http.HandlerFunc {
 		}
 
 		// Get split to find transaction
-		split, err := store.GetSplitByID(context.Background(), id)
+		split, err := store.GetSplitByID(r.Context(), id)
 		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to get split by ID", "split_id", id) {
 			return
 		}
 
 		// Get transaction to find its group
-		transaction, err := store.GetTransactionByID(context.Background(), split.TransactionID)
+		transaction, err := store.GetTransactionByID(r.Context(), split.TransactionID)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction", "transaction_id", split.TransactionID) {
 			return
 		}
@@ -353,7 +398,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 
 		// Verify split_user is a group member if provided
 		if updateSplitReq.SplitUser != nil {
-			groupMember, err := store.GetGroupMemberByID(context.Background(), *updateSplitReq.SplitUser)
+			groupMember, err := store.GetGroupMemberByID(r.Context(), *updateSplitReq.SplitUser)
 			if err != nil || groupMember.GroupID != transaction.GroupID {
 				logger.Warn("Split user is not a member of this group", "split_user", *updateSplitReq.SplitUser, "group_id", transaction.GroupID)
 				http.Error(w, "Split user must be a member of the transaction's group", http.StatusBadRequest)
@@ -364,7 +409,7 @@ func updateSplit(store db.Store) http.HandlerFunc {
 		logger.Warn("Updating individual split - this may leave transaction in invalid state", "split_id", id, "user_id", userID)
 
 		// Update split in database
-		split, err = store.UpdateSplit(context.Background(), db.UpdateSplitParams{
+		split, err = store.UpdateSplit(r.Context(), db.UpdateSplitParams{
 			ID:           id,
 			SplitPercent: updateSplitReq.SplitPercent,
 			SplitAmount:  updateSplitReq.SplitAmount,
@@ -400,10 +445,8 @@ func updateSplit(store db.Store) http.HandlerFunc {
 func deleteSplit(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -414,13 +457,13 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 		}
 
 		// Get split to find transaction
-		split, err := store.GetSplitByID(context.Background(), id)
+		split, err := store.GetSplitByID(r.Context(), id)
 		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to get split by ID", "split_id", id) {
 			return
 		}
 
 		// Get transaction to find its group
-		transaction, err := store.GetTransactionByID(context.Background(), split.TransactionID)
+		transaction, err := store.GetTransactionByID(r.Context(), split.TransactionID)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction", "transaction_id", split.TransactionID) {
 			return
 		}
@@ -434,7 +477,7 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 		logger.Warn("Deleting individual split - this may leave transaction in invalid state", "split_id", id, "user_id", userID)
 
 		// Delete split from database
-		split, err = store.DeleteSplit(context.Background(), id)
+		split, err = store.DeleteSplit(r.Context(), id)
 		if HandleDBError(w, err, "Split not found", "An error has occurred", "Failed to delete split", "split_id", id) {
 			return
 		}
@@ -462,6 +505,11 @@ func deleteSplit(store db.Store) http.HandlerFunc {
 // Recommended to use createTransactionSplits instead
 func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
 
 		var req struct {
 			TransactionID int64                       `json:"transaction_id"`
@@ -483,6 +531,35 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 			return
 		}
 
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), req.TransactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", req.TransactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
+			return
+		}
+
+		// Validate all SplitUser values are group members
+		for _, split := range req.Splits {
+			if split.SplitUser != nil {
+				groupMember, err := store.GetGroupMemberByID(r.Context(), *split.SplitUser)
+				if err != nil {
+					logger.Warn("Group member not found for SplitUser", "split_user", *split.SplitUser)
+					http.Error(w, "Group member not found", http.StatusBadRequest)
+					return
+				}
+				if groupMember.GroupID != transaction.GroupID {
+					logger.Warn("Split user is not a member of this group", "split_user", *split.SplitUser, "group_id", transaction.GroupID)
+					http.Error(w, "Split user must be a member of the transaction's group", http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
 		logger.Debug("Creating multiple splits", "split_count", len(req.Splits), "transaction_id", req.TransactionID)
 
 		// Convert to DB params
@@ -497,7 +574,7 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Execute transaction
-		result, err := store.CreateSplitsTx(context.Background(), db.CreateSplitsTxParams{
+		result, err := store.CreateSplitsTx(r.Context(), db.CreateSplitsTxParams{
 			TransactionID: req.TransactionID,
 			Splits:        dbSplits,
 		})
@@ -550,9 +627,27 @@ func createSplitsForTransaction(store db.Store) http.HandlerFunc {
 
 func createTransactionSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {transaction_id} from path parameter
 		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
 		if !ok {
+			return
+		}
+
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), transactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", transactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
 			return
 		}
 
@@ -572,6 +667,23 @@ func createTransactionSplits(store db.Store) http.HandlerFunc {
 			return
 		}
 
+		// Validate all SplitUser values are group members
+		for _, split := range req.Splits {
+			if split.SplitUser != nil {
+				groupMember, err := store.GetGroupMemberByID(r.Context(), *split.SplitUser)
+				if err != nil {
+					logger.Warn("Group member not found for SplitUser", "split_user", *split.SplitUser)
+					http.Error(w, "Group member not found", http.StatusBadRequest)
+					return
+				}
+				if groupMember.GroupID != transaction.GroupID {
+					logger.Warn("Split user is not a member of this group", "split_user", *split.SplitUser, "group_id", transaction.GroupID)
+					http.Error(w, "Split user must be a member of the transaction's group", http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
 		logger.Debug("Updating transaction splits", "transaction_id", transactionID, "new_split_count", len(req.Splits))
 
 		// Convert to DB params
@@ -586,7 +698,7 @@ func createTransactionSplits(store db.Store) http.HandlerFunc {
 		}
 
 		// Execute transaction to replace all splits
-		result, err := store.CreateSplitsTx(context.Background(), db.CreateSplitsTxParams{
+		result, err := store.CreateSplitsTx(r.Context(), db.CreateSplitsTxParams{
 			TransactionID: transactionID,
 			Splits:        dbSplits,
 		})
@@ -628,9 +740,27 @@ func createTransactionSplits(store db.Store) http.HandlerFunc {
 
 func updateTransactionSplits(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {transaction_id} from path parameter
 		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
 		if !ok {
+			return
+		}
+
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), transactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", transactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
 			return
 		}
 
@@ -650,6 +780,23 @@ func updateTransactionSplits(store db.Store) http.HandlerFunc {
 			return
 		}
 
+		// Validate all SplitUser values are group members
+		for _, split := range req.Splits {
+			if split.SplitUser != nil {
+				groupMember, err := store.GetGroupMemberByID(r.Context(), *split.SplitUser)
+				if err != nil {
+					logger.Warn("Group member not found for SplitUser", "split_user", *split.SplitUser)
+					http.Error(w, "Group member not found", http.StatusBadRequest)
+					return
+				}
+				if groupMember.GroupID != transaction.GroupID {
+					logger.Warn("Split user is not a member of this group", "split_user", *split.SplitUser, "group_id", transaction.GroupID)
+					http.Error(w, "Split user must be a member of the transaction's group", http.StatusBadRequest)
+					return
+				}
+			}
+		}
+
 		logger.Debug("Updating transaction splits", "transaction_id", transactionID, "new_split_count", len(req.Splits))
 
 		// Convert to DB params
@@ -664,7 +811,7 @@ func updateTransactionSplits(store db.Store) http.HandlerFunc {
 		}
 
 		// Execute transaction to replace all splits
-		result, err := store.UpdateTransactionSplitsTx(context.Background(), db.UpdateTransactionSplitsTxParams{
+		result, err := store.UpdateTransactionSplitsTx(r.Context(), db.UpdateTransactionSplitsTxParams{
 			TransactionID: transactionID,
 			Splits:        dbSplits,
 		})

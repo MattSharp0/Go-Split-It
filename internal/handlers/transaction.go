@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"context"
 	"log/slog"
 	"net/http"
 
@@ -34,6 +33,12 @@ func TransactionRoutes(s *server.Server, q db.Store) *http.ServeMux {
 
 func listTransactions(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Parse query parameters
 		limit, offset, err := ParseLimitOffset(r)
 		if err != nil {
@@ -41,7 +46,8 @@ func listTransactions(store db.Store) http.HandlerFunc {
 			return
 		}
 
-		var listTransactionParams db.ListTransactionsParams
+		var listTransactionParams db.ListTransactionsByUserGroupsParams
+		listTransactionParams.UserID = &userID
 		listTransactionParams.Limit = limit
 		listTransactionParams.Offset = offset
 
@@ -50,7 +56,7 @@ func listTransactions(store db.Store) http.HandlerFunc {
 			"offset", listTransactionParams.Offset,
 		)
 
-		transactions, err := store.ListTransactions(context.Background(), listTransactionParams)
+		transactions, err := store.ListTransactionsByUserGroups(r.Context(), listTransactionParams)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to list transactions", "limit", listTransactionParams.Limit, "offset", listTransactionParams.Offset) {
 			return
 		}
@@ -89,6 +95,12 @@ func listTransactions(store db.Store) http.HandlerFunc {
 
 func getTransactionByID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {id} from path parameter
 		id, ok := ParsePathInt64(w, r, "id", "Transaction ID is required")
 		if !ok {
@@ -98,8 +110,14 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 		logger.Debug("Getting transaction by ID", "transaction_id", id)
 
 		// Get transaction from database
-		transaction, err := store.GetTransactionByID(context.Background(), id)
+		transaction, err := store.GetTransactionByID(r.Context(), id)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", id) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
 			return
 		}
 
@@ -128,10 +146,8 @@ func getTransactionByID(store db.Store) http.HandlerFunc {
 func createTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -163,7 +179,7 @@ func createTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Verify ByUser is a group member (it should be a group_member ID)
-		groupMember, err := store.GetGroupMemberByID(context.Background(), createTransactionReq.ByUser)
+		groupMember, err := store.GetGroupMemberByID(r.Context(), createTransactionReq.ByUser)
 		if err != nil {
 			logger.Warn("Group member not found for ByUser", "by_user", createTransactionReq.ByUser)
 			http.Error(w, "Group member not found", http.StatusBadRequest)
@@ -182,7 +198,7 @@ func createTransaction(store db.Store) http.HandlerFunc {
 		)
 
 		// Create transaction in database
-		transaction, err := store.CreateTransaction(context.Background(), db.CreateTransactionParams{
+		transaction, err := store.CreateTransaction(r.Context(), db.CreateTransactionParams{
 			GroupID:         createTransactionReq.GroupID,
 			Name:            createTransactionReq.Name,
 			TransactionDate: createTransactionReq.TransactionDate,
@@ -224,10 +240,8 @@ func createTransaction(store db.Store) http.HandlerFunc {
 func updateTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -238,7 +252,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Get transaction to find its group
-		transaction, err := store.GetTransactionByID(context.Background(), id)
+		transaction, err := store.GetTransactionByID(r.Context(), id)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", id) {
 			return
 		}
@@ -271,7 +285,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Verify ByUser is a group member
-		groupMember, err := store.GetGroupMemberByID(context.Background(), updateTransactionReq.ByUser)
+		groupMember, err := store.GetGroupMemberByID(r.Context(), updateTransactionReq.ByUser)
 		if err != nil {
 			logger.Warn("Group member not found for ByUser", "by_user", updateTransactionReq.ByUser)
 			http.Error(w, "Group member not found", http.StatusBadRequest)
@@ -286,7 +300,7 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 		logger.Debug("Updating transaction", "transaction_id", id, "user_id", userID)
 
 		// Update transaction in database
-		transaction, err = store.UpdateTransaction(context.Background(), db.UpdateTransactionParams{
+		transaction, err = store.UpdateTransaction(r.Context(), db.UpdateTransactionParams{
 			ID:              id,
 			GroupID:         updateTransactionReq.GroupID,
 			Name:            updateTransactionReq.Name,
@@ -325,10 +339,8 @@ func updateTransaction(store db.Store) http.HandlerFunc {
 func deleteTransaction(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
-		userID, ok := auth.GetUserID(r.Context())
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
-			logger.Warn("User ID not found in context")
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -339,7 +351,7 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 		}
 
 		// Get transaction to find its group
-		transaction, err := store.GetTransactionByID(context.Background(), id)
+		transaction, err := store.GetTransactionByID(r.Context(), id)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", id) {
 			return
 		}
@@ -353,7 +365,7 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 		logger.Debug("Deleting transaction", "transaction_id", id, "user_id", userID)
 
 		// Delete transaction from database
-		transaction, err = store.DeleteTransaction(context.Background(), id)
+		transaction, err = store.DeleteTransaction(r.Context(), id)
 		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to delete transaction", "transaction_id", id) {
 			return
 		}
@@ -386,15 +398,33 @@ func deleteTransaction(store db.Store) http.HandlerFunc {
 // GET /transactions/{transaction_id}/splits
 func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {transaction_id} from path parameter
 		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
 		if !ok {
 			return
 		}
 
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), transactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", transactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
+			return
+		}
+
 		logger.Debug("Getting splits for transaction", "transaction_id", transactionID)
 
-		splits, err := store.GetSplitsByTransactionID(context.Background(), transactionID)
+		splits, err := store.GetSplitsByTransactionID(r.Context(), transactionID)
 		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by transaction ID", "transaction_id", transactionID) {
 			return
 		}
@@ -452,7 +482,7 @@ func createSplitNested(store db.Store) http.HandlerFunc {
 		logger.Debug("Creating split", "transaction_id", createSplitReq.TransactionID)
 
 		// Create split in database
-		split, err := store.CreateSplit(context.Background(), db.CreateSplitParams{
+		split, err := store.CreateSplit(r.Context(), db.CreateSplitParams{
 			TransactionID: createSplitReq.TransactionID,
 			SplitPercent:  createSplitReq.SplitPercent,
 			SplitAmount:   createSplitReq.SplitAmount,

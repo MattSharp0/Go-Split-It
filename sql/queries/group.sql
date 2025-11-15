@@ -32,6 +32,16 @@ ORDER BY name
 LIMIT $1
 OFFSET $2;
 
+-- name: ListGroupsByUser :many
+SELECT 
+  g.*
+FROM "groups" g
+INNER JOIN group_members gm ON g.id = gm.group_id
+WHERE gm.user_id = $1
+ORDER BY g.name
+LIMIT $2
+OFFSET $3;
+
 -- name: UpdateGroup :one
 UPDATE "groups"
 SET name = $1
