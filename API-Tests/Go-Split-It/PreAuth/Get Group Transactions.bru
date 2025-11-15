@@ -1,0 +1,40 @@
+meta {
+  name: Get Group Transactions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/groups/{{group_id}}/transactions
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~limit: 10
+  ~offset: 0
+  ~start_date: 2025-05-01
+  ~end_date: 2025-05-01
+}
+
+script:post-response {
+  test("An access token is returned", () => {
+      expect(res.getBody()).to.have.property('token')
+      expect(res.getBody().token).to.be.a('string')
+      // Set the collection-scope "token" variable to the token received from the API
+      // This lets us use it in other requests
+      bru.setVar('token', res.getBody().token)
+  })
+  
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
+
+docs {
+  This returns a `token` that you can use to retrieve information later on.
+  
+  We have included a test to confirm if a token is returned. We have also added test scripts to copy the token to the `token` collection variable. This makes it easy for us to reuse this token in other requests in the collection.
+}

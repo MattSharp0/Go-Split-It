@@ -1,0 +1,29 @@
+meta {
+  name: Create Group
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/groups/
+  body: text
+  auth: inherit
+}
+
+params:query {
+  ~limit: 10
+  ~offset: 0
+  ~start_date: 2025-05-01
+  ~end_date: 2025-04-01
+}
+
+body:text {
+  {
+    "name":"Test Group 8"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

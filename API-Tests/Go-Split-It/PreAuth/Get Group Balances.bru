@@ -1,0 +1,27 @@
+meta {
+  name: Get Group Balances
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/groups/{{group_id}}/balances
+  body: text
+  auth: inherit
+}
+
+params:query {
+  ~limit: 10
+  ~offset: 0
+}
+
+body:text {
+  {
+    "user_id": 2
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
