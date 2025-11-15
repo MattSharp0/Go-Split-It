@@ -1,0 +1,28 @@
+meta {
+  name: Create Transaction
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/transactions/
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+      "group_id":8,
+      "name":"test-g8-1",
+      "transaction_date": "2025-10-01T00:00:00Z",
+      "amount": "10",
+      "cateogry":"",
+      "note":"",
+      "by_user":1
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

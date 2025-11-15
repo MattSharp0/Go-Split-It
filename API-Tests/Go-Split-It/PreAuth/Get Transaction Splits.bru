@@ -1,0 +1,23 @@
+meta {
+  name: Get Transaction Splits
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/transactions/{{transaction_id}}/splits
+  body: none
+  auth: inherit
+}
+
+params:query {
+  ~limit: 10
+  ~offset: 0
+  ~start_date: 2025-05-01
+  ~end_date: 2025-04-01
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

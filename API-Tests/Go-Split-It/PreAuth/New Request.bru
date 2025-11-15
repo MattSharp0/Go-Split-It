@@ -1,0 +1,16 @@
+meta {
+  name: New Request
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/groups/1
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -15,11 +15,17 @@ hello:
 
 # start docker container for DB
 postgres: 
-	docker run --name $(DB_CONTAINER_NAME) -p 5432:5432 -e POSTGRES_USER=$(DATABASE_USER) -e POSTGRES_PASSWORD=$(DATABASE_PASSWORD) -d postgres:postgres:18.0-alpine3.22
+	docker run --name $(DB_CONTAINER_NAME) -p 5432:5432 -e POSTGRES_USER=$(DATABASE_USER) -e POSTGRES_PASSWORD=$(DATABASE_PASSWORD) -d postgres:18.0-alpine3.22
+
+startdb:
+	docker start $(DB_CONTAINER_NAME)
+
+stopdb:
+	docker stop $(DB_CONTAINER_NAME)
 
 # create txsplitdb database
 createdb:
-    docker exec -it $(DB_CONTAINER_NAME) createdb --username=root --owner=root $(DATABASE_NAME)
+	docker exec -it $(DB_CONTAINER_NAME) createdb --username=root --owner=root $(DATABASE_NAME)
 
 # drop txsplitdb
 dropdb:
@@ -48,4 +54,4 @@ test-coverage-html:
 # docker_build:
 #     docker build --build-arg DATABASE_URL="$(DATABASE_URL)" -t splitapp .
 
-.PHONY: hello postgres createdb dropdb sqlc migrateup migratedown test test-coverage test-coverage-html
+.PHONY: hello postgres startdb stopdb createdb dropdb sqlc migrateup migratedown test test-coverage test-coverage-html
