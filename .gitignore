@@ -5,9 +5,10 @@
 *.csv
 ROUTE_ORDERING.md
 SPLIT_API_GUIDE.md
+User Auth.md
 
-# Backups
-backup.sql
+# Database backup files
+db_backup/
 
 # Go build artifacts
 *.test
@@ -17,4 +18,7 @@ coverage.html
 
 # VS Code
 .vscode/settings.json
-Documentation/User Auth.md
+.DS_Store
+
+# API Testing
+Go-Split-It.postman_collection.json
