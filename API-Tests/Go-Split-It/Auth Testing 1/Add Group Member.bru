@@ -1,0 +1,22 @@
+meta {
+  name: Add Group Member
+  type: http
+  seq: 7
+}
+
+post {
+  url: http://localhost:8080/groups/9/members
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "user_id":6
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

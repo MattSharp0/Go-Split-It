@@ -1,0 +1,22 @@
+meta {
+  name: Create Group
+  type: http
+  seq: 4
+}
+
+post {
+  url: http://localhost:8080/groups/
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name":"Roomates"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

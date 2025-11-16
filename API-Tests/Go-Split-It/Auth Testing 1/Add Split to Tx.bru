@@ -1,0 +1,33 @@
+meta {
+  name: Add Split to Tx
+  type: http
+  seq: 9
+}
+
+post {
+  url: http://localhost:8080/splits/transaction/21/batch
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "splits": [
+      {
+        "split_percent": 0.50,
+        "split_amount": 100.00,
+        "split_user": 19
+      },
+      {
+        "split_percent": 0.50,
+        "split_amount": 100.00,
+        "split_user": 20
+      }
+    ]
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

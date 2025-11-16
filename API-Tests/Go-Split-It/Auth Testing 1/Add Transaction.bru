@@ -1,0 +1,27 @@
+meta {
+  name: Add Transaction
+  type: http
+  seq: 8
+}
+
+post {
+  url: http://localhost:8080/groups/9/transactions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Grocery Shopping",
+    "transaction_date": "2025-10-01T00:00:00Z",
+    "amount": "200.00",
+    "category": "Groceries",
+    "note": "Weekly shopping at Whole Foods",
+    "by_user": 20
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -1,0 +1,24 @@
+meta {
+  name: Register
+  type: http
+  seq: 2
+}
+
+post {
+  url: http://localhost:8080/auth/register
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Haley Haltom",
+    "email": "hhaltom@mattsharp.dev",
+    "password": "test1234"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
