@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -40,7 +39,8 @@ func TestListSplits(t *testing.T) {
 						ModifiedAt:    time.Now(),
 					},
 				}
-				ms.On("ListSplits", mock.Anything, db.ListSplitsParams{Limit: 100, Offset: 0}).Return(splits, nil)
+				userID := int64Ptr(1)
+				ms.On("ListSplitsByUserGroups", mock.Anything, db.ListSplitsByUserGroupsParams{UserID: userID, Limit: 100, Offset: 0}).Return(splits, nil)
 			},
 			requestURL:     "/splits",
 			expectedStatus: http.StatusOK,
@@ -49,7 +49,8 @@ func TestListSplits(t *testing.T) {
 		{
 			name: "empty list",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("ListSplits", mock.Anything, db.ListSplitsParams{Limit: 100, Offset: 0}).Return([]db.Split{}, nil)
+				userID := int64Ptr(1)
+				ms.On("ListSplitsByUserGroups", mock.Anything, db.ListSplitsByUserGroupsParams{UserID: userID, Limit: 100, Offset: 0}).Return([]db.Split{}, nil)
 			},
 			requestURL:     "/splits",
 			expectedStatus: http.StatusOK,
@@ -58,7 +59,8 @@ func TestListSplits(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("ListSplits", mock.Anything, db.ListSplitsParams{Limit: 100, Offset: 0}).Return(nil, errors.New("database error"))
+				userID := int64Ptr(1)
+				ms.On("ListSplitsByUserGroups", mock.Anything, db.ListSplitsByUserGroupsParams{UserID: userID, Limit: 100, Offset: 0}).Return(nil, errors.New("database error"))
 			},
 			requestURL:     "/splits",
 			expectedStatus: http.StatusInternalServerError,
@@ -71,7 +73,7 @@ func TestListSplits(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", tt.requestURL, nil)
+			req := createRequestWithUserID("GET", tt.requestURL, nil, 1)
 			rr := httptest.NewRecorder()
 
 			handler := listSplits(mockStore)
@@ -100,6 +102,17 @@ func TestGetSplitsByTransactionID(t *testing.T) {
 		{
 			name: "success with splits",
 			setupMock: func(ms *mocks.MockStore) {
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				splits := []db.Split{
 					{
 						ID:            1,
@@ -127,6 +140,17 @@ func TestGetSplitsByTransactionID(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("GetSplitsByTransactionID", mock.Anything, int64(1)).Return(nil, errors.New("database error"))
 			},
 			pathValue:      "1",
@@ -140,7 +164,7 @@ func TestGetSplitsByTransactionID(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", "/splits/transaction/"+tt.pathValue, nil)
+			req := createRequestWithUserID("GET", "/splits/transaction/"+tt.pathValue, nil, 1)
 			req.SetPathValue("transaction_id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -181,6 +205,17 @@ func TestGetSplitByID(t *testing.T) {
 					ModifiedAt:    time.Now(),
 				}
 				ms.On("GetSplitByID", mock.Anything, int64(1)).Return(split, nil)
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 			},
 			pathValue:      "1",
 			expectedStatus: http.StatusOK,
@@ -218,7 +253,7 @@ func TestGetSplitByID(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", "/splits/"+tt.pathValue, nil)
+			req := createRequestWithUserID("GET", "/splits/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -248,6 +283,24 @@ func TestCreateSplit(t *testing.T) {
 		{
 			name: "success",
 			setupMock: func(ms *mocks.MockStore) {
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				// Mock GetGroupMemberByID for split_user validation
+				groupMember := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+					UserID:  userID,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMember, nil)
 				split := db.Split{
 					ID:            1,
 					TransactionID: 1,
@@ -286,6 +339,17 @@ func TestCreateSplit(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("CreateSplit", mock.Anything, mock.AnythingOfType("db.CreateSplitParams")).Return(db.Split{}, errors.New("database error"))
 			},
 			requestBody: map[string]interface{}{
@@ -312,7 +376,7 @@ func TestCreateSplit(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("POST", "/splits", bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("POST", "/splits", bodyBytes, 1)
 			rr := httptest.NewRecorder()
 
 			handler := createSplit(mockStore)
@@ -346,13 +410,42 @@ func TestUpdateSplit(t *testing.T) {
 					ID:            1,
 					TransactionID: 1,
 					TxAmount:      decimal.NewFromInt(100),
+					SplitPercent:  decimal.NewFromFloat(0.5),
+					SplitAmount:   decimal.NewFromInt(50),
+					SplitUser:     int64Ptr(1),
+					CreatedAt:     time.Now(),
+					ModifiedAt:    time.Now(),
+				}
+				ms.On("GetSplitByID", mock.Anything, int64(1)).Return(split, nil)
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				// Mock GetGroupMemberByID for split_user validation
+				groupMember := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+					UserID:  userID,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMember, nil)
+				updatedSplit := db.Split{
+					ID:            1,
+					TransactionID: 1,
+					TxAmount:      decimal.NewFromInt(100),
 					SplitPercent:  decimal.NewFromFloat(0.75),
 					SplitAmount:   decimal.NewFromInt(75),
 					SplitUser:     int64Ptr(1),
 					CreatedAt:     time.Now(),
 					ModifiedAt:    time.Now(),
 				}
-				ms.On("UpdateSplit", mock.Anything, mock.AnythingOfType("db.UpdateSplitParams")).Return(split, nil)
+				ms.On("UpdateSplit", mock.Anything, mock.AnythingOfType("db.UpdateSplitParams")).Return(updatedSplit, nil)
 			},
 			pathValue: "1",
 			requestBody: map[string]interface{}{
@@ -374,7 +467,7 @@ func TestUpdateSplit(t *testing.T) {
 		{
 			name: "split not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("UpdateSplit", mock.Anything, mock.AnythingOfType("db.UpdateSplitParams")).Return(db.Split{}, pgx.ErrNoRows)
+				ms.On("GetSplitByID", mock.Anything, int64(999)).Return(db.Split{}, pgx.ErrNoRows)
 			},
 			pathValue: "999",
 			requestBody: map[string]interface{}{
@@ -385,8 +478,31 @@ func TestUpdateSplit(t *testing.T) {
 			expectSplit:    false,
 		},
 		{
-			name:           "invalid JSON",
-			setupMock:      func(ms *mocks.MockStore) {},
+			name: "invalid JSON",
+			setupMock: func(ms *mocks.MockStore) {
+				split := db.Split{
+					ID:            1,
+					TransactionID: 1,
+					TxAmount:      decimal.NewFromInt(100),
+					SplitPercent:  decimal.NewFromFloat(0.5),
+					SplitAmount:   decimal.NewFromInt(50),
+					SplitUser:     int64Ptr(1),
+					CreatedAt:     time.Now(),
+					ModifiedAt:    time.Now(),
+				}
+				ms.On("GetSplitByID", mock.Anything, int64(1)).Return(split, nil)
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+			},
 			pathValue:      "1",
 			requestBody:    "invalid json",
 			expectedStatus: http.StatusBadRequest,
@@ -408,7 +524,7 @@ func TestUpdateSplit(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("PUT", "/splits/"+tt.pathValue, bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("PUT", "/splits/"+tt.pathValue, bodyBytes, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -447,6 +563,18 @@ func TestDeleteSplit(t *testing.T) {
 					CreatedAt:     time.Now(),
 					ModifiedAt:    time.Now(),
 				}
+				ms.On("GetSplitByID", mock.Anything, int64(1)).Return(split, nil)
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("DeleteSplit", mock.Anything, int64(1)).Return(split, nil)
 			},
 			pathValue:      "1",
@@ -463,7 +591,7 @@ func TestDeleteSplit(t *testing.T) {
 		{
 			name: "split not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("DeleteSplit", mock.Anything, int64(999)).Return(db.Split{}, pgx.ErrNoRows)
+				ms.On("GetSplitByID", mock.Anything, int64(999)).Return(db.Split{}, pgx.ErrNoRows)
 			},
 			pathValue:      "999",
 			expectedStatus: http.StatusNotFound,
@@ -472,6 +600,27 @@ func TestDeleteSplit(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
+				split := db.Split{
+					ID:            1,
+					TransactionID: 1,
+					TxAmount:      decimal.NewFromInt(100),
+					SplitPercent:  decimal.NewFromFloat(0.5),
+					SplitAmount:   decimal.NewFromInt(50),
+					CreatedAt:     time.Now(),
+					ModifiedAt:    time.Now(),
+				}
+				ms.On("GetSplitByID", mock.Anything, int64(1)).Return(split, nil)
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("DeleteSplit", mock.Anything, int64(1)).Return(db.Split{}, errors.New("database error"))
 			},
 			pathValue:      "1",
@@ -485,7 +634,7 @@ func TestDeleteSplit(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("DELETE", "/splits/"+tt.pathValue, nil)
+			req := createRequestWithUserID("DELETE", "/splits/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 

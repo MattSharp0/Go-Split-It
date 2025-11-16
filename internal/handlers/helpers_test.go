@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/MattSharp0/transaction-split-go/internal/auth"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,20 @@ import (
 func createRequest(method, url string, body []byte) *http.Request {
 	req := httptest.NewRequest(method, url, bytes.NewBuffer(body))
 	return req
+}
+
+// Helper function to create a request with user ID in context
+// This is needed for testing handlers that require authentication
+func createRequestWithUserID(method, url string, body []byte, userID int64) *http.Request {
+	req := httptest.NewRequest(method, url, bytes.NewBuffer(body))
+	ctx := auth.SetUserID(req.Context(), userID)
+	req = req.WithContext(ctx)
+	return req
+}
+
+// Helper functions for test data
+func int64Ptr(i int64) *int64 {
+	return &i
 }
 
 // Helper function to create a request with path values

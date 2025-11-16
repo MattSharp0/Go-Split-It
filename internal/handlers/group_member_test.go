@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -29,17 +28,20 @@ func TestListGroupMembersByGroupID(t *testing.T) {
 		{
 			name: "success with members",
 			setupMock: func(ms *mocks.MockStore) {
+				// Mock group membership check
+				userID := int64Ptr(1)
 				members := []db.ListGroupMembersByGroupIDRow{
 					{
 						ID:         1,
 						GroupID:    1,
 						GroupName:  "Group 1",
 						MemberName: stringPtr("Member 1"),
-						UserID:     int64Ptr(1),
+						UserID:     userID,
 						UserName:   "User 1",
 						CreatedAt:  time.Now(),
 					},
 				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 100, Offset: 0}).Return(members, nil)
 			},
 			pathValue:      "1",
@@ -50,6 +52,12 @@ func TestListGroupMembersByGroupID(t *testing.T) {
 		{
 			name: "success with empty members",
 			setupMock: func(ms *mocks.MockStore) {
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 100, Offset: 0}).Return([]db.ListGroupMembersByGroupIDRow{}, nil)
 			},
 			pathValue:      "1",
@@ -68,6 +76,12 @@ func TestListGroupMembersByGroupID(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 100, Offset: 0}).Return(nil, errors.New("database error"))
 			},
 			pathValue:      "1",
@@ -86,7 +100,7 @@ func TestListGroupMembersByGroupID(t *testing.T) {
 			if tt.queryParams != "" {
 				url += "?" + tt.queryParams
 			}
-			req := httptest.NewRequest("GET", url, nil)
+			req := createRequestWithUserID("GET", url, nil, 1)
 			req.SetPathValue("group_id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -126,6 +140,12 @@ func TestGetGroupMemberByID(t *testing.T) {
 					CreatedAt:  time.Now(),
 				}
 				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(member, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 			},
 			pathValue:      "1",
 			expectedStatus: http.StatusOK,
@@ -163,7 +183,7 @@ func TestGetGroupMemberByID(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", "/group_members/"+tt.pathValue, nil)
+			req := createRequestWithUserID("GET", "/group_members/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -193,14 +213,20 @@ func TestCreateGroupMember(t *testing.T) {
 		{
 			name: "success with user ID",
 			setupMock: func(ms *mocks.MockStore) {
-				userID := int64(1)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				userIDVal := int64(1)
 				member := db.GroupMember{
 					ID:        1,
 					GroupID:   1,
-					UserID:    &userID,
+					UserID:    &userIDVal,
 					CreatedAt: time.Now(),
 				}
-				ms.On("CreateGroupMember", mock.Anything, db.CreateGroupMemberParams{GroupID: 1, UserID: &userID}).Return(member, nil)
+				ms.On("CreateGroupMember", mock.Anything, db.CreateGroupMemberParams{GroupID: 1, UserID: &userIDVal}).Return(member, nil)
 			},
 			requestBody:    map[string]interface{}{"group_id": 1, "user_id": 1},
 			expectedStatus: http.StatusCreated,
@@ -209,6 +235,12 @@ func TestCreateGroupMember(t *testing.T) {
 		{
 			name: "success without user ID",
 			setupMock: func(ms *mocks.MockStore) {
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				member := db.GroupMember{
 					ID:        1,
 					GroupID:   1,
@@ -238,6 +270,12 @@ func TestCreateGroupMember(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
+				// Mock group membership check
+				userIDPtr := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userIDPtr},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				userID := int64(1)
 				ms.On("CreateGroupMember", mock.Anything, db.CreateGroupMemberParams{GroupID: 1, UserID: &userID}).Return(db.GroupMember{}, errors.New("database error"))
 			},
@@ -261,7 +299,7 @@ func TestCreateGroupMember(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("POST", "/group_members", bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("POST", "/group_members", bodyBytes, 1)
 			rr := httptest.NewRecorder()
 
 			handler := createGroupMember(mockStore)
@@ -291,14 +329,26 @@ func TestUpdateGroupMember(t *testing.T) {
 		{
 			name: "success",
 			setupMock: func(ms *mocks.MockStore) {
-				userID := int64(2)
+				// Get group member first
+				groupMemberRow := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMemberRow, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				userIDVal := int64(2)
 				member := db.GroupMember{
 					ID:        1,
 					GroupID:   1,
-					UserID:    &userID,
+					UserID:    &userIDVal,
 					CreatedAt: time.Now(),
 				}
-				ms.On("UpdateGroupMember", mock.Anything, db.UpdateGroupMemberParams{ID: 1, GroupID: 1, UserID: &userID}).Return(member, nil)
+				ms.On("UpdateGroupMember", mock.Anything, db.UpdateGroupMemberParams{ID: 1, GroupID: 1, UserID: &userIDVal}).Return(member, nil)
 			},
 			pathValue:      "1",
 			requestBody:    map[string]interface{}{"group_id": 1, "user_id": 2},
@@ -314,8 +364,21 @@ func TestUpdateGroupMember(t *testing.T) {
 			expectMember:   false,
 		},
 		{
-			name:           "missing group_id",
-			setupMock:      func(ms *mocks.MockStore) {},
+			name: "missing group_id",
+			setupMock: func(ms *mocks.MockStore) {
+				// Get group member first
+				groupMemberRow := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMemberRow, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+			},
 			pathValue:      "1",
 			requestBody:    map[string]interface{}{"user_id": 1},
 			expectedStatus: http.StatusBadRequest,
@@ -324,8 +387,7 @@ func TestUpdateGroupMember(t *testing.T) {
 		{
 			name: "member not found",
 			setupMock: func(ms *mocks.MockStore) {
-				userID := int64(1)
-				ms.On("UpdateGroupMember", mock.Anything, db.UpdateGroupMemberParams{ID: 999, GroupID: 1, UserID: &userID}).Return(db.GroupMember{}, pgx.ErrNoRows)
+				ms.On("GetGroupMemberByID", mock.Anything, int64(999)).Return(db.GetGroupMemberByIDRow{}, pgx.ErrNoRows)
 			},
 			pathValue:      "999",
 			requestBody:    map[string]interface{}{"group_id": 1, "user_id": 1},
@@ -333,8 +395,21 @@ func TestUpdateGroupMember(t *testing.T) {
 			expectMember:   false,
 		},
 		{
-			name:           "invalid JSON",
-			setupMock:      func(ms *mocks.MockStore) {},
+			name: "invalid JSON",
+			setupMock: func(ms *mocks.MockStore) {
+				// Get group member first
+				groupMemberRow := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMemberRow, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+			},
 			pathValue:      "1",
 			requestBody:    "invalid json",
 			expectedStatus: http.StatusBadRequest,
@@ -356,7 +431,7 @@ func TestUpdateGroupMember(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("PUT", "/group_members/"+tt.pathValue, bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("PUT", "/group_members/"+tt.pathValue, bodyBytes, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -386,14 +461,26 @@ func TestDeleteGroupMember(t *testing.T) {
 		{
 			name: "success",
 			setupMock: func(ms *mocks.MockStore) {
-				userID := int64(1)
+				// Get group member first
+				groupMemberRow := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMemberRow, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				userIDVal := int64(1)
 				member := db.GroupMember{
 					ID:        1,
 					GroupID:   1,
-					UserID:    &userID,
+					UserID:    &userIDVal,
 					CreatedAt: time.Now(),
 				}
-				ms.On("DeleteGroupMember", mock.Anything, int64(1)).Return(member, nil)
+				ms.On("UnlinkGroupMember", mock.Anything, int64(1)).Return(member, nil)
 			},
 			pathValue:      "1",
 			expectedStatus: http.StatusOK,
@@ -409,7 +496,7 @@ func TestDeleteGroupMember(t *testing.T) {
 		{
 			name: "member not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("DeleteGroupMember", mock.Anything, int64(999)).Return(db.GroupMember{}, pgx.ErrNoRows)
+				ms.On("GetGroupMemberByID", mock.Anything, int64(999)).Return(db.GetGroupMemberByIDRow{}, pgx.ErrNoRows)
 			},
 			pathValue:      "999",
 			expectedStatus: http.StatusNotFound,
@@ -418,7 +505,18 @@ func TestDeleteGroupMember(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("DeleteGroupMember", mock.Anything, int64(1)).Return(db.GroupMember{}, errors.New("database error"))
+				groupMemberRow := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMemberRow, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				ms.On("UnlinkGroupMember", mock.Anything, int64(1)).Return(db.GroupMember{}, errors.New("database error"))
 			},
 			pathValue:      "1",
 			expectedStatus: http.StatusInternalServerError,
@@ -431,7 +529,7 @@ func TestDeleteGroupMember(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("DELETE", "/group_members/"+tt.pathValue, nil)
+			req := createRequestWithUserID("DELETE", "/group_members/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -453,8 +551,4 @@ func TestDeleteGroupMember(t *testing.T) {
 // Helper functions
 func stringPtr(s string) *string {
 	return &s
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
 }

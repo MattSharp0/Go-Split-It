@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -41,7 +40,8 @@ func TestListTransactions(t *testing.T) {
 						ModifiedAt:      time.Now(),
 					},
 				}
-				ms.On("ListTransactions", mock.Anything, db.ListTransactionsParams{Limit: 100, Offset: 0}).Return(transactions, nil)
+				userID := int64Ptr(1)
+				ms.On("ListTransactionsByUserGroups", mock.Anything, db.ListTransactionsByUserGroupsParams{UserID: userID, Limit: 100, Offset: 0}).Return(transactions, nil)
 			},
 			requestURL:     "/transactions",
 			expectedStatus: http.StatusOK,
@@ -50,7 +50,8 @@ func TestListTransactions(t *testing.T) {
 		{
 			name: "empty list",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("ListTransactions", mock.Anything, db.ListTransactionsParams{Limit: 100, Offset: 0}).Return([]db.Transaction{}, nil)
+				userID := int64Ptr(1)
+				ms.On("ListTransactionsByUserGroups", mock.Anything, db.ListTransactionsByUserGroupsParams{UserID: userID, Limit: 100, Offset: 0}).Return([]db.Transaction{}, nil)
 			},
 			requestURL:     "/transactions",
 			expectedStatus: http.StatusOK,
@@ -59,7 +60,8 @@ func TestListTransactions(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("ListTransactions", mock.Anything, db.ListTransactionsParams{Limit: 100, Offset: 0}).Return(nil, errors.New("database error"))
+				userID := int64Ptr(1)
+				ms.On("ListTransactionsByUserGroups", mock.Anything, db.ListTransactionsByUserGroupsParams{UserID: userID, Limit: 100, Offset: 0}).Return(nil, errors.New("database error"))
 			},
 			requestURL:     "/transactions",
 			expectedStatus: http.StatusInternalServerError,
@@ -72,7 +74,7 @@ func TestListTransactions(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", tt.requestURL, nil)
+			req := createRequestWithUserID("GET", tt.requestURL, nil, 1)
 			rr := httptest.NewRecorder()
 
 			handler := listTransactions(mockStore)
@@ -112,6 +114,12 @@ func TestGetTransactionByID(t *testing.T) {
 					ModifiedAt:      time.Now(),
 				}
 				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 			},
 			pathValue:         "1",
 			expectedStatus:    http.StatusOK,
@@ -140,7 +148,7 @@ func TestGetTransactionByID(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", "/transactions/"+tt.pathValue, nil)
+			req := createRequestWithUserID("GET", "/transactions/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -170,6 +178,19 @@ func TestCreateTransaction(t *testing.T) {
 		{
 			name: "success",
 			setupMock: func(ms *mocks.MockStore) {
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				// Mock GetGroupMemberByID for ByUser validation
+				groupMember := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+					UserID:  userID,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMember, nil)
 				transaction := db.Transaction{
 					ID:              1,
 					GroupID:         1,
@@ -236,7 +257,7 @@ func TestCreateTransaction(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("POST", "/transactions", bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("POST", "/transactions", bodyBytes, 1)
 			rr := httptest.NewRecorder()
 
 			handler := createTransaction(mockStore)
@@ -266,6 +287,25 @@ func TestUpdateTransaction(t *testing.T) {
 		{
 			name: "success",
 			setupMock: func(ms *mocks.MockStore) {
+				// Get transaction first
+				existingTransaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(existingTransaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
+				// Mock GetGroupMemberByID for ByUser validation
+				groupMember := db.GetGroupMemberByIDRow{
+					ID:      1,
+					GroupID: 1,
+					UserID:  userID,
+				}
+				ms.On("GetGroupMemberByID", mock.Anything, int64(1)).Return(groupMember, nil)
 				transaction := db.Transaction{
 					ID:              1,
 					GroupID:         1,
@@ -300,7 +340,8 @@ func TestUpdateTransaction(t *testing.T) {
 		{
 			name: "transaction not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("UpdateTransaction", mock.Anything, mock.AnythingOfType("db.UpdateTransactionParams")).Return(db.Transaction{}, pgx.ErrNoRows)
+				// Get transaction first
+				ms.On("GetTransactionByID", mock.Anything, int64(999)).Return(db.Transaction{}, pgx.ErrNoRows)
 			},
 			pathValue: "999",
 			requestBody: map[string]interface{}{
@@ -327,7 +368,7 @@ func TestUpdateTransaction(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("PUT", "/transactions/"+tt.pathValue, bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("PUT", "/transactions/"+tt.pathValue, bodyBytes, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -367,6 +408,13 @@ func TestDeleteTransaction(t *testing.T) {
 					CreatedAt:       time.Now(),
 					ModifiedAt:      time.Now(),
 				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("DeleteTransaction", mock.Anything, int64(1)).Return(transaction, nil)
 			},
 			pathValue:         "1",
@@ -383,7 +431,7 @@ func TestDeleteTransaction(t *testing.T) {
 		{
 			name: "transaction not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("DeleteTransaction", mock.Anything, int64(999)).Return(db.Transaction{}, pgx.ErrNoRows)
+				ms.On("GetTransactionByID", mock.Anything, int64(999)).Return(db.Transaction{}, pgx.ErrNoRows)
 			},
 			pathValue:         "999",
 			expectedStatus:    http.StatusNotFound,
@@ -396,7 +444,7 @@ func TestDeleteTransaction(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("DELETE", "/transactions/"+tt.pathValue, nil)
+			req := createRequestWithUserID("DELETE", "/transactions/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -426,6 +474,17 @@ func TestGetSplitsByTransactionNested(t *testing.T) {
 		{
 			name: "success with splits",
 			setupMock: func(ms *mocks.MockStore) {
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				splits := []db.Split{
 					{
 						ID:            1,
@@ -454,6 +513,17 @@ func TestGetSplitsByTransactionNested(t *testing.T) {
 		{
 			name: "database error",
 			setupMock: func(ms *mocks.MockStore) {
+				transaction := db.Transaction{
+					ID:      1,
+					GroupID: 1,
+				}
+				ms.On("GetTransactionByID", mock.Anything, int64(1)).Return(transaction, nil)
+				// Mock group membership check
+				userID := int64Ptr(1)
+				members := []db.ListGroupMembersByGroupIDRow{
+					{ID: 1, GroupID: 1, UserID: userID},
+				}
+				ms.On("ListGroupMembersByGroupID", mock.Anything, db.ListGroupMembersByGroupIDParams{GroupID: 1, Limit: 1000, Offset: 0}).Return(members, nil)
 				ms.On("GetSplitsByTransactionID", mock.Anything, int64(1)).Return(nil, errors.New("database error"))
 			},
 			pathValue:      "1",
@@ -467,7 +537,7 @@ func TestGetSplitsByTransactionNested(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", "/transactions/"+tt.pathValue+"/splits", nil)
+			req := createRequestWithUserID("GET", "/transactions/"+tt.pathValue+"/splits", nil, 1)
 			req.SetPathValue("transaction_id", tt.pathValue)
 			rr := httptest.NewRecorder()
 

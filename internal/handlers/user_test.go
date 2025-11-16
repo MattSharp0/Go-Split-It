@@ -21,10 +21,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// Initialize logger for tests
+	// Initialize logger for tests - disable output
 	cfg := logger.Config{
 		Level:      logger.LevelDebug,
-		Output:     logger.OutputStdout,
+		Output:     logger.OutputDiscard,
 		JSONFormat: false,
 	}
 	_, err := logger.InitLogger(cfg)
@@ -289,6 +289,7 @@ func TestUpdateUser(t *testing.T) {
 			setupMock: func(ms *mocks.MockStore) {
 				user := db.User{ID: 1, Name: "Alice Updated", CreatedAt: time.Now(), ModifiedAt: time.Now()}
 				ms.On("UpdateUser", mock.Anything, db.UpdateUserParams{ID: 1, Name: "Alice Updated"}).Return(user, nil)
+				// Note: CheckOwnUser validates authenticatedUserID == id, so we use userID 1 for both
 			},
 			pathValue:      "1",
 			requestBody:    map[string]string{"name": "Alice Updated"},
@@ -314,9 +315,10 @@ func TestUpdateUser(t *testing.T) {
 		{
 			name: "user not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("UpdateUser", mock.Anything, db.UpdateUserParams{ID: 999, Name: "Alice"}).Return(db.User{}, pgx.ErrNoRows)
+				// CheckOwnUser validates authenticatedUserID == id, so use 1 for both
+				ms.On("UpdateUser", mock.Anything, db.UpdateUserParams{ID: 1, Name: "Alice"}).Return(db.User{}, pgx.ErrNoRows)
 			},
-			pathValue:      "999",
+			pathValue:      "1",
 			requestBody:    map[string]string{"name": "Alice"},
 			expectedStatus: http.StatusNotFound,
 			expectUser:     false,
@@ -345,7 +347,7 @@ func TestUpdateUser(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			req := httptest.NewRequest("PUT", "/users/"+tt.pathValue, bytes.NewBuffer(bodyBytes))
+			req := createRequestWithUserID("PUT", "/users/"+tt.pathValue, bodyBytes, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -392,9 +394,10 @@ func TestDeleteUser(t *testing.T) {
 		{
 			name: "user not found",
 			setupMock: func(ms *mocks.MockStore) {
-				ms.On("DeleteUser", mock.Anything, int64(999)).Return(db.User{}, pgx.ErrNoRows)
+				// CheckOwnUser validates authenticatedUserID == id, so use 1 for both
+				ms.On("DeleteUser", mock.Anything, int64(1)).Return(db.User{}, pgx.ErrNoRows)
 			},
-			pathValue:      "999",
+			pathValue:      "1",
 			expectedStatus: http.StatusNotFound,
 			expectUser:     false,
 		},
@@ -414,7 +417,7 @@ func TestDeleteUser(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("DELETE", "/users/"+tt.pathValue, nil)
+			req := createRequestWithUserID("DELETE", "/users/"+tt.pathValue, nil, 1)
 			req.SetPathValue("id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -478,11 +481,12 @@ func TestGetUserBalances(t *testing.T) {
 		{
 			name: "user not found",
 			setupMock: func(ms *mocks.MockStore) {
+				// CheckOwnUser validates authenticatedUserID == pathUserID, so use 1 for both
 				ms.On("UserBalancesSummary", mock.Anything, mock.MatchedBy(func(id *int64) bool {
-					return *id == 999
+					return id != nil && *id == 1
 				})).Return(db.UserBalancesSummaryRow{}, pgx.ErrNoRows)
 			},
-			pathValue:      "999",
+			pathValue:      "1",
 			expectedStatus: http.StatusNotFound,
 		},
 	}
@@ -492,7 +496,7 @@ func TestGetUserBalances(t *testing.T) {
 			mockStore := mocks.NewMockStore(t)
 			tt.setupMock(mockStore)
 
-			req := httptest.NewRequest("GET", "/users/"+tt.pathValue+"/balances", nil)
+			req := createRequestWithUserID("GET", "/users/"+tt.pathValue+"/balances", nil, 1)
 			req.SetPathValue("user_id", tt.pathValue)
 			rr := httptest.NewRecorder()
 
@@ -581,7 +585,7 @@ func TestGetTransactionsByUserNested(t *testing.T) {
 			if tt.queryParams != "" {
 				url += "?" + tt.queryParams
 			}
-			req := httptest.NewRequest("GET", url, nil)
+			req := createRequestWithUserID("GET", url, nil, 1)
 			req.SetPathValue("user_id", tt.pathValue)
 			rr := httptest.NewRecorder()
 

@@ -148,6 +148,14 @@ func (m *MockStore) GetSplitsByUser(ctx context.Context, arg db.GetSplitsByUserP
 	return args.Get(0).([]db.Split), args.Error(1)
 }
 
+func (m *MockStore) GetSplitsByUserFiltered(ctx context.Context, arg db.GetSplitsByUserFilteredParams) ([]db.Split, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Split), args.Error(1)
+}
+
 func (m *MockStore) GetTransactionByID(ctx context.Context, id int64) (db.Transaction, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(db.Transaction), args.Error(1)
@@ -224,7 +232,23 @@ func (m *MockStore) ListGroups(ctx context.Context, arg db.ListGroupsParams) ([]
 	return args.Get(0).([]db.Group), args.Error(1)
 }
 
+func (m *MockStore) ListGroupsByUser(ctx context.Context, arg db.ListGroupsByUserParams) ([]db.Group, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Group), args.Error(1)
+}
+
 func (m *MockStore) ListSplits(ctx context.Context, arg db.ListSplitsParams) ([]db.Split, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Split), args.Error(1)
+}
+
+func (m *MockStore) ListSplitsByUserGroups(ctx context.Context, arg db.ListSplitsByUserGroupsParams) ([]db.Split, error) {
 	args := m.Called(ctx, arg)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -241,6 +265,14 @@ func (m *MockStore) ListSplitsForTransaction(ctx context.Context, transactionID 
 }
 
 func (m *MockStore) ListTransactions(ctx context.Context, arg db.ListTransactionsParams) ([]db.Transaction, error) {
+	args := m.Called(ctx, arg)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Transaction), args.Error(1)
+}
+
+func (m *MockStore) ListTransactionsByUserGroups(ctx context.Context, arg db.ListTransactionsByUserGroupsParams) ([]db.Transaction, error) {
 	args := m.Called(ctx, arg)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
