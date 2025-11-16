@@ -27,9 +27,10 @@ const (
 type LogOutput string
 
 const (
-	OutputStdout LogOutput = "stdout"
-	OutputFile   LogOutput = "file"
-	OutputBoth   LogOutput = "both"
+	OutputStdout  LogOutput = "stdout"
+	OutputFile    LogOutput = "file"
+	OutputBoth    LogOutput = "both"
+	OutputDiscard LogOutput = "discard" // Add this
 )
 
 // Config holds logger configuration
@@ -197,6 +198,8 @@ func InitLogger(cfg Config) (*slog.Logger, error) {
 			return nil, err
 		}
 		writer = io.MultiWriter(os.Stdout, fileWriter)
+	case OutputDiscard:
+		writer = io.Discard
 	default:
 		writer = os.Stdout
 	}
