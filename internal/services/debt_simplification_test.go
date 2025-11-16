@@ -1,13 +1,30 @@
 package services
 
 import (
+	"os"
 	"testing"
 
+	"github.com/MattSharp0/transaction-split-go/internal/logger"
 	"github.com/MattSharp0/transaction-split-go/internal/models"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	// Initialize logger for tests - disable output
+	cfg := logger.Config{
+		Level:      logger.LevelDebug,
+		Output:     logger.OutputDiscard,
+		JSONFormat: false,
+	}
+	_, err := logger.InitLogger(cfg)
+	if err != nil {
+		os.Exit(1)
+	}
+	code := m.Run()
+	os.Exit(code)
+}
 
 func TestSplitNetBalances(t *testing.T) {
 	tests := []struct {
@@ -86,7 +103,7 @@ func TestSimplifyDebts(t *testing.T) {
 		name        string
 		balances    []*models.NetBalance
 		expectError bool
-		validate    func(t *testing.T, payments []models.BalancePayment)
+		validate    func(t *testing.T, payments []models.SimplifiedPaymentsResponse)
 	}{
 		{
 			name: "simple two-person debt",
@@ -95,7 +112,7 @@ func TestSimplifyDebts(t *testing.T) {
 				{UserID: 2, NetBalance: decimal.NewFromInt(-100)},
 			},
 			expectError: false,
-			validate: func(t *testing.T, payments []models.BalancePayment) {
+			validate: func(t *testing.T, payments []models.SimplifiedPaymentsResponse) {
 				require.Len(t, payments, 1)
 				assert.Equal(t, int64(1), payments[0].FromUserID)
 				assert.Equal(t, int64(2), payments[0].ToUserID)
@@ -110,7 +127,7 @@ func TestSimplifyDebts(t *testing.T) {
 				{UserID: 3, NetBalance: decimal.NewFromInt(-50)},
 			},
 			expectError: false,
-			validate: func(t *testing.T, payments []models.BalancePayment) {
+			validate: func(t *testing.T, payments []models.SimplifiedPaymentsResponse) {
 				// Verify we have at least one payment
 				require.GreaterOrEqual(t, len(payments), 1)
 				// Verify total payments equal total positive balance (debt owed)
@@ -133,7 +150,7 @@ func TestSimplifyDebts(t *testing.T) {
 				{UserID: 4, NetBalance: decimal.NewFromInt(-100)},
 			},
 			expectError: false,
-			validate: func(t *testing.T, payments []models.BalancePayment) {
+			validate: func(t *testing.T, payments []models.SimplifiedPaymentsResponse) {
 				// Verify we have at least one payment
 				require.GreaterOrEqual(t, len(payments), 1)
 				totalAmount := decimal.Zero
@@ -155,7 +172,7 @@ func TestSimplifyDebts(t *testing.T) {
 				{UserID: 4, NetBalance: decimal.NewFromInt(25)},
 			},
 			expectError: false,
-			validate: func(t *testing.T, payments []models.BalancePayment) {
+			validate: func(t *testing.T, payments []models.SimplifiedPaymentsResponse) {
 				// Verify we have at least one payment
 				require.GreaterOrEqual(t, len(payments), 1)
 				totalAmount := decimal.Zero
@@ -182,7 +199,7 @@ func TestSimplifyDebts(t *testing.T) {
 				{UserID: 2, NetBalance: decimal.Zero},
 			},
 			expectError: false,
-			validate: func(t *testing.T, payments []models.BalancePayment) {
+			validate: func(t *testing.T, payments []models.SimplifiedPaymentsResponse) {
 				assert.Empty(t, payments)
 			},
 		},
@@ -194,7 +211,7 @@ func TestSimplifyDebts(t *testing.T) {
 				{UserID: 3, NetBalance: decimal.NewFromFloat(-50.25)},
 			},
 			expectError: false,
-			validate: func(t *testing.T, payments []models.BalancePayment) {
+			validate: func(t *testing.T, payments []models.SimplifiedPaymentsResponse) {
 				// Verify we have at least one payment
 				require.GreaterOrEqual(t, len(payments), 1)
 				totalAmount := decimal.Zero
