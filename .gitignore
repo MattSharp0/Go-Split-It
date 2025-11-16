@@ -6,7 +6,9 @@
 ROUTE_ORDERING.md
 SPLIT_API_GUIDE.md
 User Auth.md
-User Auth.md
+CONTEXT_USAGE.md
+TEST_AUTHENTICATION_FIX.md
+MOCKSTORE_UPDATE.md
 
 # Database backup files
 db_backup/
