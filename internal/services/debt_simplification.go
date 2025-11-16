@@ -27,11 +27,11 @@ func splitNetBalances(balances []*models.NetBalance) ([]*models.NetBalance, []*m
 	return debtorNetBalances, creditorNetBalances
 }
 
-func SimplifyDebts(balances []*models.NetBalance) ([]models.BalancePayment, error) {
+func SimplifyDebts(balances []*models.NetBalance) ([]models.SimplifiedPaymentsResponse, error) {
 
 	if sum := utils.SumNetBalances(balances); !sum.IsZero() {
 		logger.Warn("Net balances do not sum to zero", "sum", sum)
-		return nil, errors.New("Net Balances do not sum to zero")
+		return nil, errors.New("net Balances do not sum to zero")
 	}
 
 	debtorNetBalances, creditorNetBalances := splitNetBalances(balances)
@@ -42,7 +42,7 @@ func SimplifyDebts(balances []*models.NetBalance) ([]models.BalancePayment, erro
 	heap.Init(debtorHeap)
 	heap.Init(creditorHeap)
 
-	payments := make([]models.BalancePayment, debtorHeap.Len())
+	payments := make([]models.SimplifiedPaymentsResponse, debtorHeap.Len())
 	var paymentCount int
 
 	for debtorHeap.Len() > 0 {
@@ -64,7 +64,7 @@ func SimplifyDebts(balances []*models.NetBalance) ([]models.BalancePayment, erro
 			pa = decimal.Min(creditor.NetBalance.Abs(), debtor.NetBalance)
 		}
 
-		pmt := models.BalancePayment{FromUserID: debtor.UserID, ToUserID: creditor.UserID, Amount: pa}
+		pmt := models.SimplifiedPaymentsResponse{FromUserID: debtor.UserID, ToUserID: creditor.UserID, Amount: pa}
 		payments = append(payments, pmt)
 		paymentCount++
 

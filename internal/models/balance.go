@@ -8,12 +8,6 @@ type NetBalance struct {
 	NetBalance decimal.Decimal `json:"net_balance"`
 }
 
-type BalancePayment struct {
-	FromUserID int64           `json:"from_user_id"`
-	ToUserID   int64           `json:"to_user_id"`
-	Amount     decimal.Decimal `json:"amount"`
-}
-
 // Balance response types
 type BalanceResponse struct {
 	CreditorID int64           `json:"creditor_id"`
