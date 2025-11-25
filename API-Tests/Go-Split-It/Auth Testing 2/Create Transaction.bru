@@ -1,0 +1,27 @@
+meta {
+  name: Create Transaction
+  type: http
+  seq: 7
+}
+
+post {
+  url: http://localhost:8080/groups/9/transactions
+  body: json
+  auth: inherit
+}
+
+body:json {
+  {
+    "name": "Wine bar2",
+    "transaction_date": "2025-11-01T00:00:00Z",
+    "amount": "102.00",
+    "category": "Dining out",
+    "note": "yummy wine",
+    "by_user": 20
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

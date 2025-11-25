@@ -1,0 +1,8 @@
+// Auto-add CSRF token to POST/PUT/PATCH/DELETE requests
+const method = bru.getMethod();
+const csrfToken = bru.getVar("csrf_token");
+
+if (csrfToken && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+  bru.setHeader("X-CSRF-Token", csrfToken);
+  console.log("CSRF token added to header");
+}

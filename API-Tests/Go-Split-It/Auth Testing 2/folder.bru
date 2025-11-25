@@ -4,9 +4,22 @@ meta {
 }
 
 auth {
-  mode: bearer
+  mode: none
 }
 
-auth:bearer {
-  token: {{HH_Token}}
+vars:post-response {
+  user_id: res("user.id")
+}
+
+script:pre-request {
+  // Auto-add CSRF token to state-changing requests
+  const method = req.method
+  const csrfToken = bru.getVar("csrf_token")
+  
+  if (csrfToken && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    req.setHeader("X-CSRF-Token", csrfToken)
+    console.log("CSRF token set for request: ", method)
+  } else {
+    console.log("CSRF token not required for request: ", method)
+  }
 }

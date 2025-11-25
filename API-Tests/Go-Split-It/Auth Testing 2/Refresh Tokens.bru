@@ -1,0 +1,28 @@
+meta {
+  name: Refresh Tokens
+  type: http
+  seq: 6
+}
+
+post {
+  url: http://localhost:8080/auth/refresh
+  body: none
+  auth: inherit
+}
+
+tests {
+  test("Extract new CSRF token", function() {
+    const res = bru.getRes();
+    const body = res.getBody();
+    
+    if (body.csrf_token) {
+      bru.setVar("csrf_token", body.csrf_token);
+      console.log("New CSRF token stored:", body.csrf_token);
+    }
+  });
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
