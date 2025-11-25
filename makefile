@@ -50,8 +50,11 @@ test-coverage-html:
 	go test ./... -coverprofile=coverage.out
 	go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated at coverage.html"
+
+run:
+	go run cmd/api/main.go
     
 # docker_build:
 #     docker build --build-arg DATABASE_URL="$(DATABASE_URL)" -t splitapp .
 
-.PHONY: hello postgres startdb stopdb createdb dropdb sqlc migrateup migratedown test test-coverage test-coverage-html
+.PHONY: hello postgres startdb stopdb createdb dropdb sqlc migrateup migratedown test test-coverage test-coverage-html run
