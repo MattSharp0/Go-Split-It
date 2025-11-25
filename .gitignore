@@ -9,6 +9,8 @@ User Auth.md
 CONTEXT_USAGE.md
 TEST_AUTHENTICATION_FIX.md
 MOCKSTORE_UPDATE.md
+AUTHENTICATION.md
+CURL_QUICK_REFERENCE.md
 
 # Database backup files
 db_backup/
@@ -25,3 +27,4 @@ coverage.html
 
 # API Testing
 Go-Split-It.postman_collection.json
+
