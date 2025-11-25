@@ -53,6 +53,39 @@ func (m *MockStore) CreateUserWithAuth(ctx context.Context, arg db.CreateUserWit
 	return args.Get(0).(db.User), args.Error(1)
 }
 
+func (m *MockStore) CreateRefreshToken(ctx context.Context, arg db.CreateRefreshTokenParams) (db.RefreshToken, error) {
+	args := m.Called(ctx, arg)
+	return args.Get(0).(db.RefreshToken), args.Error(1)
+}
+
+func (m *MockStore) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (db.RefreshToken, error) {
+	args := m.Called(ctx, tokenHash)
+	return args.Get(0).(db.RefreshToken), args.Error(1)
+}
+
+func (m *MockStore) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
+	args := m.Called(ctx, tokenHash)
+	return args.Error(0)
+}
+
+func (m *MockStore) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+	args := m.Called(ctx, userID)
+	return args.Error(0)
+}
+
+func (m *MockStore) DeleteExpiredTokens(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetUserRefreshTokens(ctx context.Context, userID int64) ([]db.RefreshToken, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.RefreshToken), args.Error(1)
+}
+
 func (m *MockStore) DeleteGroup(ctx context.Context, id int64) (db.Group, error) {
 	args := m.Called(ctx, id)
 	return args.Get(0).(db.Group), args.Error(1)
