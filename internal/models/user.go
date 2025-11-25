@@ -36,6 +36,12 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string       `json:"token"`
-	User  UserResponse `json:"user"`
+	Token     string       `json:"token"`
+	User      UserResponse `json:"user"`
+	CSRFToken string       `json:"csrf_token,omitempty"`
+}
+
+type RefreshResponse struct {
+	Token     string `json:"token"`
+	CSRFToken string `json:"csrf_token,omitempty"`
 }

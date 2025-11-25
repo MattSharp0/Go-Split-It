@@ -11,10 +11,12 @@ import (
 type Querier interface {
 	CreateGroup(ctx context.Context, name string) (Group, error)
 	CreateGroupMember(ctx context.Context, arg CreateGroupMemberParams) (GroupMember, error)
+	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
 	CreateSplit(ctx context.Context, arg CreateSplitParams) (Split, error)
 	CreateTransaction(ctx context.Context, arg CreateTransactionParams) (Transaction, error)
 	CreateUser(ctx context.Context, name string) (User, error)
 	CreateUserWithAuth(ctx context.Context, arg CreateUserWithAuthParams) (User, error)
+	DeleteExpiredTokens(ctx context.Context) error
 	DeleteGroup(ctx context.Context, id int64) (Group, error)
 	DeleteGroupMember(ctx context.Context, id int64) (GroupMember, error)
 	DeleteGroupMembersByGroupID(ctx context.Context, groupID int64) ([]GroupMember, error)
@@ -25,6 +27,7 @@ type Querier interface {
 	GetGroupByID(ctx context.Context, id int64) (Group, error)
 	GetGroupByIDForUpdate(ctx context.Context, id int64) (Group, error)
 	GetGroupMemberByID(ctx context.Context, id int64) (GetGroupMemberByIDRow, error)
+	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error)
 	GetSplitByID(ctx context.Context, id int64) (Split, error)
 	GetSplitByIDForUpdate(ctx context.Context, id int64) (Split, error)
 	GetSplitsByTransactionID(ctx context.Context, transactionID int64) ([]Split, error)
@@ -38,6 +41,7 @@ type Querier interface {
 	GetTransactionsByUserInPeriod(ctx context.Context, arg GetTransactionsByUserInPeriodParams) ([]Transaction, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	GetUserRefreshTokens(ctx context.Context, userID int64) ([]RefreshToken, error)
 	GroupBalances(ctx context.Context, groupID int64) ([]GroupBalancesRow, error)
 	GroupBalancesNet(ctx context.Context, groupID int64) ([]GroupBalancesNetRow, error)
 	ListGroupMembersByGroupID(ctx context.Context, arg ListGroupMembersByGroupIDParams) ([]ListGroupMembersByGroupIDRow, error)
@@ -49,6 +53,8 @@ type Querier interface {
 	ListTransactions(ctx context.Context, arg ListTransactionsParams) ([]Transaction, error)
 	ListTransactionsByUserGroups(ctx context.Context, arg ListTransactionsByUserGroupsParams) ([]Transaction, error)
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	RevokeAllUserTokens(ctx context.Context, userID int64) error
+	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UnlinkGroupMember(ctx context.Context, id int64) (GroupMember, error)
 	UpdateGroup(ctx context.Context, arg UpdateGroupParams) (Group, error)
 	UpdateGroupMember(ctx context.Context, arg UpdateGroupMemberParams) (GroupMember, error)

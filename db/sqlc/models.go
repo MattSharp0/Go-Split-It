@@ -7,6 +7,7 @@ package db
 import (
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,6 +35,16 @@ type GroupMember struct {
 	MemberName *string   `json:"member_name"`
 	UserID     *int64    `json:"user_id"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+type RefreshToken struct {
+	ID         int64              `json:"id"`
+	TokenHash  string             `json:"token_hash"`
+	UserID     int64              `json:"user_id"`
+	ExpiresAt  time.Time          `json:"expires_at"`
+	CreatedAt  time.Time          `json:"created_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+	DeviceInfo *string            `json:"device_info"`
 }
 
 type Split struct {
