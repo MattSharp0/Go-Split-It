@@ -23,9 +23,9 @@ func AuthRoutes(s *server.Server, store db.Store) *http.ServeMux {
 	mux.HandleFunc("POST /refresh", refresh(store))   // POST auth/refresh: Refresh tokens
 
 	// Protected routes
-	mux.HandleFunc("GET /me", auth.RequireAuth(http.HandlerFunc(getMe(store))).ServeHTTP)           // GET auth/me: Get current user
-	mux.HandleFunc("POST /logout", auth.RequireAuth(http.HandlerFunc(logout(store))).ServeHTTP)     // POST auth/logout: Logout
-	mux.HandleFunc("GET /csrf-token", auth.RequireAuth(http.HandlerFunc(getCSRFToken())).ServeHTTP) // GET auth/csrf-token: Get CSRF token
+	mux.HandleFunc("GET /me", auth.RequireAuth(http.HandlerFunc(getMe(store))).ServeHTTP)                         // GET auth/me: Get current user
+	mux.HandleFunc("POST /logout", auth.RequireAuth(auth.RequireCSRF(http.HandlerFunc(logout(store)))).ServeHTTP) // POST auth/logout: Logout
+	mux.HandleFunc("GET /csrf-token", auth.RequireAuth(http.HandlerFunc(getCSRFToken())).ServeHTTP)               // GET auth/csrf-token: Get CSRF token
 
 	return mux
 }

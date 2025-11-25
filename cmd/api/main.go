@@ -78,11 +78,11 @@ func main() {
 	s.Mux().Handle("/auth/", http.StripPrefix("/auth", handlers.AuthRoutes(s, store)))
 
 	// Protected routes - require authentication
-	s.Mux().Handle("/users/", auth.RequireAuth(http.StripPrefix("/users", handlers.UserRoutes(s, store))))
-	s.Mux().Handle("/groups/", auth.RequireAuth(http.StripPrefix("/groups", handlers.GroupRoutes(s, store))))
-	s.Mux().Handle("/group_members/", auth.RequireAuth(http.StripPrefix("/group_members", handlers.GroupMemberRoutes(s, store))))
-	s.Mux().Handle("/transactions/", auth.RequireAuth(http.StripPrefix("/transactions", handlers.TransactionRoutes(s, store))))
-	s.Mux().Handle("/splits/", auth.RequireAuth(http.StripPrefix("/splits", handlers.SplitRoutes(s, store))))
+	s.Mux().Handle("/users/", auth.RequireAuth(auth.RequireCSRF(http.StripPrefix("/users", handlers.UserRoutes(s, store)))))
+	s.Mux().Handle("/groups/", auth.RequireAuth(auth.RequireCSRF(http.StripPrefix("/groups", handlers.GroupRoutes(s, store)))))
+	s.Mux().Handle("/group_members/", auth.RequireAuth(auth.RequireCSRF(http.StripPrefix("/group_members", handlers.GroupMemberRoutes(s, store)))))
+	s.Mux().Handle("/transactions/", auth.RequireAuth(auth.RequireCSRF(http.StripPrefix("/transactions", handlers.TransactionRoutes(s, store)))))
+	s.Mux().Handle("/splits/", auth.RequireAuth(auth.RequireCSRF(http.StripPrefix("/splits", handlers.SplitRoutes(s, store)))))
 
 	// Start server in goroutine
 	if err := s.Start(); err != nil {
