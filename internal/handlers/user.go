@@ -26,9 +26,10 @@ func UserRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux.HandleFunc("PATCH /{id}", updateUser(q))  // PATCH: Update user
 	mux.HandleFunc("DELETE /{id}", deleteUser(q)) // DELETE: Delete user
 
-	// Nested resource handlers - RESTful approach for user transactions
-	mux.HandleFunc("GET /{user_id}/transactions", getTransactionsByUserNested(q)) // GET: List transactions by user
-	mux.HandleFunc("GET /{user_id}/balances", getUserBalances(q))                 // GET: Get user balances
+	// Nested resource handlers - RESTful approach for current user's data
+	mux.HandleFunc("GET /me/transactions", getTransactionsByUserNested(q)) // GET: List transactions for current user
+	mux.HandleFunc("GET /me/splits", getUserSplits(q))                     // GET: List splits for current user
+	mux.HandleFunc("GET /me/balances", getUserBalances(q))                 // GET: Get balances for current user
 
 	return mux
 }
@@ -273,12 +274,12 @@ func deleteUser(store db.Store) http.HandlerFunc {
 
 // Nested resource handler
 
-// List transactions for user
-// GET /users/{user_id}/transactions
+// List transactions for current authenticated user
+// GET /users/me/transactions
 func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract {user_id} from path parameter
-		userID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
+		// Get authenticated user ID (users can only see their own transactions)
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
 			return
 		}
@@ -363,33 +364,83 @@ func getTransactionsByUserNested(store db.Store) http.HandlerFunc {
 	}
 }
 
-// Get user balances
-// GET /users/{user_id}/balances
+// List splits for current authenticated user
+// GET /users/me/splits
+func getUserSplits(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID (users can only see their own splits)
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
+		// Parse query parameters
+		limit, offset, err := ParseLimitOffset(r)
+		if err != nil {
+			http.Error(w, "Invalid parameter: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		var listParams db.GetSplitsByUserFilteredParams
+		listParams.SplitUser = &userID
+		listParams.UserID = &userID
+		listParams.Limit = limit
+		listParams.Offset = offset
+
+		logger.Debug("Getting splits for user", "user_id", userID, "limit", listParams.Limit, "offset", listParams.Offset)
+
+		splits, err := store.GetSplitsByUserFiltered(r.Context(), listParams)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get splits by user", "user_id", userID) {
+			return
+		}
+
+		splitResponses := make([]models.SplitResponse, len(splits))
+		for i, split := range splits {
+			splitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		count := len(splitResponses)
+
+		listSplitResponse := models.ListSplitResponse{
+			Splits: splitResponses,
+			Count:  int32(count),
+			Limit:  listParams.Limit,
+			Offset: listParams.Offset,
+		}
+
+		if err := WriteJSONResponseOK(w, listSplitResponse); err != nil {
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+
+		logger.Debug("Successfully listed user splits", "user_id", userID, "count", count)
+	}
+}
+
+// Get balances for current authenticated user
+// GET /users/me/balances
 func getUserBalances(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Get authenticated user ID
-		authenticatedUserID, ok := GetAuthenticatedUserID(w, r)
+		// Get authenticated user ID (users can only see their own balances)
+		userID, ok := GetAuthenticatedUserID(w, r)
 		if !ok {
 			return
 		}
 
-		// Extract {user_id} from path parameter
-		pathUserID, ok := ParsePathInt64(w, r, "user_id", "User ID is required")
-		if !ok {
-			return
-		}
-
-		// Verify user can only access their own balances
-		if err := auth.CheckOwnUser(authenticatedUserID, pathUserID); err != nil {
-			http.Error(w, "Forbidden: cannot access another user's balances", http.StatusForbidden)
-			return
-		}
-
-		logger.Debug("Getting balances for user", "user_id", pathUserID)
+		logger.Debug("Getting balances for user", "user_id", userID)
 
 		// Get summary
-		summaryRow, err := store.UserBalancesSummary(r.Context(), &pathUserID)
-		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user balances summary", "user_id", pathUserID) {
+		summaryRow, err := store.UserBalancesSummary(r.Context(), &userID)
+		if HandleDBError(w, err, "User not found", "An error has occurred", "Failed to get user balances summary", "user_id", userID) {
 			return
 		}
 
@@ -406,8 +457,8 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		// Get balances by group
-		balancesByGroupRows, err := store.UserBalancesByGroup(r.Context(), &pathUserID)
-		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by group", "user_id", pathUserID) {
+		balancesByGroupRows, err := store.UserBalancesByGroup(r.Context(), &userID)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by group", "user_id", userID) {
 			return
 		}
 
@@ -430,8 +481,8 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		// Get balances by member
-		balancesByMemberRows, err := store.UserBalancesByMember(r.Context(), &pathUserID)
-		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by member", "user_id", pathUserID) {
+		balancesByMemberRows, err := store.UserBalancesByMember(r.Context(), &userID)
+		if HandleDBListError(w, err, "An error has occurred", "Failed to get user balances by member", "user_id", userID) {
 			return
 		}
 
@@ -458,7 +509,7 @@ func getUserBalances(store db.Store) http.HandlerFunc {
 		}
 
 		response := models.UserBalancesResponse{
-			UserID:           pathUserID,
+			UserID:           userID,
 			Summary:          summary,
 			BalancesByGroup:  balancesByGroup,
 			BalancesByMember: balancesByMember,

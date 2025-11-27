@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -24,9 +25,11 @@ func TransactionRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux.HandleFunc("PATCH /{id}", updateTransaction(q))  // PATCH: Update transaction
 	mux.HandleFunc("DELETE /{id}", deleteTransaction(q)) // DELETE: Delete transaction
 
-	// Nested resource handlers - RESTful approach for splits
-	mux.HandleFunc("GET /{transaction_id}/splits", getSplitsByTransactionNested(q)) // GET: List splits for transaction
-	mux.HandleFunc("POST /{transaction_id}/splits", createSplitNested(q))           // POST: Create split for transaction
+	// Nested resource handlers - RESTful approach for splits (batch operations only)
+	mux.HandleFunc("GET /{transaction_id}/splits", getSplitsByTransactionNested(q))   // GET: List splits for transaction
+	mux.HandleFunc("POST /{transaction_id}/splits", createTransactionSplitsBatch(q))  // POST: Create/replace all splits (batch)
+	mux.HandleFunc("PUT /{transaction_id}/splits", updateTransactionSplitsBatch(q))   // PUT: Replace all splits (batch)
+	mux.HandleFunc("PATCH /{transaction_id}/splits", updateTransactionSplitsBatch(q)) // PATCH: Replace all splits (batch)
 
 	return mux
 }
@@ -459,54 +462,246 @@ func getSplitsByTransactionNested(store db.Store) http.HandlerFunc {
 	}
 }
 
-// Create split for transaction
+// Create/replace all splits for transaction (batch)
 // POST /transactions/{transaction_id}/splits
-func createSplitNested(store db.Store) http.HandlerFunc {
+func createTransactionSplitsBatch(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
 		// Extract {transaction_id} from path parameter
 		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
 		if !ok {
 			return
 		}
 
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), transactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", transactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
+			return
+		}
+
 		// Decode request body
-		var createSplitReq models.CreateSplitRequest
-		if err := DecodeJSONBody(r, &createSplitReq); err != nil {
+		var req struct {
+			Splits []models.CreateSplitRequest `json:"splits"`
+		}
+
+		if err := DecodeJSONBody(r, &req); err != nil {
 			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
 			return
 		}
 
-		// Override transaction_id from URL
-		createSplitReq.TransactionID = transactionID
-
-		logger.Debug("Creating split", "transaction_id", createSplitReq.TransactionID)
-
-		// Create split in database
-		split, err := store.CreateSplit(r.Context(), db.CreateSplitParams{
-			TransactionID: createSplitReq.TransactionID,
-			SplitPercent:  createSplitReq.SplitPercent,
-			SplitAmount:   createSplitReq.SplitAmount,
-			SplitUser:     createSplitReq.SplitUser,
-		})
-		if HandleDBListError(w, err, "An error has occurred", "Failed to create split", "transaction_id", createSplitReq.TransactionID) {
+		if len(req.Splits) == 0 {
+			http.Error(w, "At least one split is required", http.StatusBadRequest)
 			return
 		}
-		logger.Debug("Split created successfully", "split_id", split.ID, "transaction_id", createSplitReq.TransactionID)
 
-		// Convert to response format
-		splitResponse := models.SplitResponse{
-			ID:            split.ID,
-			TransactionID: split.TransactionID,
-			TxAmount:      split.TxAmount,
-			SplitPercent:  split.SplitPercent,
-			SplitAmount:   split.SplitAmount,
-			SplitUser:     split.SplitUser,
-			CreatedAt:     split.CreatedAt,
-			ModifiedAt:    split.ModifiedAt,
+		// Get group member list to check all users
+		groupMembers, err := store.ListGroupMembersByGroupID(r.Context(), db.ListGroupMembersByGroupIDParams{GroupID: transaction.GroupID, Limit: 1000, Offset: 0})
+		if HandleDBError(w, err, "Group members not found", "An error has occurred", "Failed to get group members by group ID", "group id", transaction.GroupID) {
+			return
 		}
 
-		// Send response with 201 Created status
-		if err := WriteJSONResponseCreated(w, splitResponse); err != nil {
+		// Validate split group members are in tx group
+		if err := ValidateSplitMembersInGroup(req.Splits, groupMembers, transaction.GroupID); err != nil {
+
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Validate splits total Tx amount & 100%
+		if err := ValidateSplitsTotals(req.Splits, transaction.Amount); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+
+		logger.Debug("Creating transaction splits", "transaction_id", transactionID, "split_count", len(req.Splits))
+
+		// Convert to DB params
+		dbSplits := make([]db.CreateSplitParams, len(req.Splits))
+		for i, split := range req.Splits {
+			dbSplits[i] = db.CreateSplitParams{
+				TransactionID: transactionID,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+			}
+		}
+
+		// Execute transaction to replace all splits
+		result, err := store.CreateSplitsTx(r.Context(), db.CreateSplitsTxParams{
+			TransactionID: transactionID,
+			Splits:        dbSplits,
+		})
+		if err != nil {
+			logger.Error("Failed to create transaction splits", "error", err, "transaction_id", transactionID)
+			http.Error(w, fmt.Sprintf("Failed to create splits: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Convert to response format
+		splitResponses := make([]models.SplitResponse, len(result.Splits))
+		for i, split := range result.Splits {
+			splitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		response := struct {
+			Splits  []models.SplitResponse `json:"splits"`
+			Message string                 `json:"message"`
+		}{
+			Splits:  splitResponses,
+			Message: fmt.Sprintf("Successfully created %d splits", len(result.Splits)),
+		}
+
+		if err := WriteJSONResponseCreated(w, response); err != nil {
+			http.Error(w, "An error has occurred", http.StatusInternalServerError)
+			return
+		}
+	}
+}
+
+// Update/replace all splits for transaction (batch)
+// PUT /transactions/{transaction_id}/splits or PATCH /transactions/{transaction_id}/splits
+func updateTransactionSplitsBatch(store db.Store) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Get authenticated user ID
+		userID, ok := GetAuthenticatedUserID(w, r)
+		if !ok {
+			return
+		}
+
+		// Extract {transaction_id} from path parameter
+		transactionID, ok := ParsePathInt64(w, r, "transaction_id", "Transaction ID is required")
+		if !ok {
+			return
+		}
+
+		// Get transaction to find its group
+		transaction, err := store.GetTransactionByID(r.Context(), transactionID)
+		if HandleDBError(w, err, "Transaction not found", "An error has occurred", "Failed to get transaction by ID", "transaction_id", transactionID) {
+			return
+		}
+
+		// Verify user is a member of the group
+		if err := auth.CheckGroupMembership(r.Context(), store, transaction.GroupID, userID); err != nil {
+			http.Error(w, "Forbidden: User is not a current group member", http.StatusForbidden)
+			return
+		}
+
+		// Decode request body
+		var req struct {
+			Splits []models.CreateSplitRequest `json:"splits"`
+		}
+
+		if err := DecodeJSONBody(r, &req); err != nil {
+			http.Error(w, "Bad request: invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if len(req.Splits) == 0 {
+			http.Error(w, "At least one split is required", http.StatusBadRequest)
+			return
+		}
+
+		// Get group member list to check all users
+		groupMembers, err := store.ListGroupMembersByGroupID(r.Context(), db.ListGroupMembersByGroupIDParams{GroupID: transaction.GroupID, Limit: 1000, Offset: 0})
+		if HandleDBError(w, err, "Group members not found", "An error has occurred", "Failed to get group members by group ID", "group id", transaction.GroupID) {
+			return
+		}
+
+		// Validate split group members are in tx group
+		if err := ValidateSplitMembersInGroup(req.Splits, groupMembers, transaction.GroupID); err != nil {
+
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		// Validate splits total Tx amount & 100%
+		if err := ValidateSplitsTotals(req.Splits, transaction.Amount); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		}
+
+		logger.Debug("Updating transaction splits", "transaction_id", transactionID, "new_split_count", len(req.Splits))
+
+		// Convert to DB params
+		dbSplits := make([]db.CreateSplitParams, len(req.Splits))
+		for i, split := range req.Splits {
+			dbSplits[i] = db.CreateSplitParams{
+				TransactionID: transactionID,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+			}
+		}
+
+		// Execute transaction to replace all splits
+		result, err := store.UpdateTransactionSplitsTx(r.Context(), db.UpdateTransactionSplitsTxParams{
+			TransactionID: transactionID,
+			Splits:        dbSplits,
+		})
+		if err != nil {
+			logger.Error("Failed to update transaction splits", "error", err, "transaction_id", transactionID)
+			http.Error(w, fmt.Sprintf("Failed to update splits: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		// Convert to response format
+		splitResponses := make([]models.SplitResponse, len(result.NewSplits))
+		for i, split := range result.NewSplits {
+			splitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		deletedSplitResponses := make([]models.SplitResponse, len(result.DeletedSplits))
+		for i, split := range result.DeletedSplits {
+			deletedSplitResponses[i] = models.SplitResponse{
+				ID:            split.ID,
+				TransactionID: split.TransactionID,
+				TxAmount:      split.TxAmount,
+				SplitPercent:  split.SplitPercent,
+				SplitAmount:   split.SplitAmount,
+				SplitUser:     split.SplitUser,
+				CreatedAt:     split.CreatedAt,
+				ModifiedAt:    split.ModifiedAt,
+			}
+		}
+
+		response := struct {
+			DeletedSplits []models.SplitResponse `json:"deleted_splits"`
+			NewSplits     []models.SplitResponse `json:"new_splits"`
+			Message       string                 `json:"message"`
+		}{
+			DeletedSplits: deletedSplitResponses,
+			NewSplits:     splitResponses,
+			Message:       fmt.Sprintf("Successfully replaced %d splits with %d new splits", len(result.DeletedSplits), len(result.NewSplits)),
+		}
+
+		if err := WriteJSONResponseOK(w, response); err != nil {
 			http.Error(w, "An error has occurred", http.StatusInternalServerError)
 			return
 		}

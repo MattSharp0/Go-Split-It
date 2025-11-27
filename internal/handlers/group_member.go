@@ -13,21 +13,16 @@ import (
 func GroupMemberRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux := http.NewServeMux()
 
-	// Root path handlers
-	mux.HandleFunc("POST /", createGroupMember(q)) // POST: Create group member
-
 	// ID path handlers
 	mux.HandleFunc("GET /{id}", getGroupMemberByID(q))   // GET: Get group member by ID
 	mux.HandleFunc("PUT /{id}", updateGroupMember(q))    // PUT: Update group member
 	mux.HandleFunc("PATCH /{id}", updateGroupMember(q))  // PATCH: Update group member
 	mux.HandleFunc("DELETE /{id}", deleteGroupMember(q)) // DELETE: Delete group member
 
-	// Group-specific routes
-	mux.HandleFunc("GET /group/{group_id}", listGroupMembersByGroupID(q)) // GET: List members by group
-
 	return mux
 }
 
+// Deprecated
 func listGroupMembersByGroupID(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID
@@ -143,6 +138,7 @@ func getGroupMemberByID(store db.Store) http.HandlerFunc {
 	}
 }
 
+// Deprecated
 func createGroupMember(store db.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get authenticated user ID

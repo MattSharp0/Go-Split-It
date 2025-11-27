@@ -39,6 +39,7 @@ func GroupRoutes(s *server.Server, q db.Store) *http.ServeMux {
 	mux.HandleFunc("GET /{group_id}/transactions", getTransactionsByGroupNested(q)) // GET: List group transactions
 	mux.HandleFunc("POST /{group_id}/transactions", createTransactionNested(q))     // POST: Create transaction in group
 
+	// Balance Handlers
 	mux.HandleFunc("GET /{group_id}/balances", getGroupBalances(q)) // GET: Get group balances
 
 	return mux
@@ -616,6 +617,8 @@ func createTransactionNested(store db.Store) http.HandlerFunc {
 		}
 	}
 }
+
+// Balance handlers
 
 // Get group balances
 // GET /groups/{group_id}/balances
