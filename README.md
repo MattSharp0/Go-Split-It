@@ -8,9 +8,83 @@ A RESTful API for managing shared expenses and transaction splitting within grou
 http://localhost:8080
 ```
 
+## Quick Reference - All Routes
+
+### Public Routes (No Authentication Required)
+- `GET /` - Health check / Hello World
+- `POST /auth/register` - Register new user
+- `POST /auth/login` - Login
+- `POST /auth/refresh` - Refresh access token
+
+### Protected Routes (Authentication + CSRF Required)
+
+#### Authentication
+- `GET /auth/me` - Get current authenticated user
+- `POST /auth/logout` - Logout (revoke refresh token)
+- `GET /auth/csrf-token` - Get CSRF token
+
+#### Users
+- `GET /users/` - List users (paginated, filtered by authenticated user)
+- `POST /users/` - Create user
+- `GET /users/{id}` - Get user by ID
+- `PUT /users/{id}` - Update user
+- `PATCH /users/{id}` - Update user
+- `DELETE /users/{id}` - Delete user
+- `GET /users/{user_id}/transactions` - List transactions by user
+- `GET /users/{user_id}/balances` - Get user balances across all groups
+
+#### Groups
+- `GET /groups/` - List groups (filtered by authenticated user's membership)
+- `POST /groups/` - Create group (creator automatically added as member)
+- `GET /groups/{id}` - Get group by ID
+- `PUT /groups/{id}` - Update group
+- `PATCH /groups/{id}` - Update group
+- `DELETE /groups/{id}` - Delete group
+- `GET /groups/{group_id}/members` - List group members
+- `POST /groups/{group_id}/members` - Add member to group
+- `POST /groups/{group_id}/members/batch` - Add multiple members (batch)
+- `PUT /groups/{group_id}/members/batch` - Replace all members (batch)
+- `PATCH /groups/{group_id}/members/batch` - Replace all members (batch)
+- `DELETE /groups/{group_id}/members/batch` - Delete all members (batch)
+- `GET /groups/{group_id}/transactions` - List group transactions (with date range)
+- `POST /groups/{group_id}/transactions` - Create transaction in group
+- `GET /groups/{group_id}/balances` - Get group balance report
+
+#### Group Members (Direct Access)
+- `POST /group_members/` - Create group member
+- `GET /group_members/{id}` - Get group member by ID
+- `PUT /group_members/{id}` - Update group member
+- `PATCH /group_members/{id}` - Update group member
+- `DELETE /group_members/{id}` - Delete/unlink group member
+- `GET /group_members/group/{group_id}` - List members by group ID
+
+#### Transactions
+- `GET /transactions/` - List transactions (filtered by authenticated user's groups)
+- `POST /transactions/` - Create transaction
+- `GET /transactions/{id}` - Get transaction by ID
+- `PUT /transactions/{id}` - Update transaction
+- `PATCH /transactions/{id}` - Update transaction
+- `DELETE /transactions/{id}` - Delete transaction
+- `GET /transactions/{transaction_id}/splits` - List splits for transaction
+- `POST /transactions/{transaction_id}/splits` - Create split for transaction
+
+#### Splits
+- `GET /splits/` - List splits (filtered by authenticated user's groups)
+- `GET /splits/{id}` - Get split by ID
+- `GET /splits/transaction/{transaction_id}` - List splits by transaction ID
+- `GET /splits/user/{user_id}` - List splits by user ID
+- `POST /splits/transaction/{transaction_id}/batch` - Create/replace all splits (batch, recommended)
+- `PUT /splits/transaction/{transaction_id}/batch` - Replace all splits (batch, recommended)
+- `PATCH /splits/transaction/{transaction_id}/batch` - Replace all splits (batch, recommended)
+
+**Note:** All protected routes require:
+1. Valid authentication token (via cookie or Authorization header)
+2. Valid CSRF token (for state-changing operations: POST, PUT, PATCH, DELETE)
+
 ## Table of Contents
 
 - [API Structure](#api-structure)
+- [Authentication](#authentication)
 - [Users](#users)
 - [Groups](#groups)
 - [Group Members](#group-members)
@@ -43,6 +117,200 @@ For flexibility, the API also provides direct access to resources:
 - `/splits/` - Direct split management
 
 Both approaches are fully supported and can be used interchangeably.
+
+---
+
+## Authentication
+
+The API uses JWT-based authentication with refresh tokens and CSRF protection. Most endpoints require authentication, except for registration, login, and token refresh.
+
+### Register
+
+Create a new user account.
+
+**Endpoint:** `POST /auth/register`
+
+**Request Body:**
+```json
+{
+  "name": "John Doe",
+  "email": "john@example.com",
+  "password": "securepassword123"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | User's full name |
+| `email` | string | Yes | User's email address (must be unique) |
+| `password` | string | Yes | Password (minimum 8 characters) |
+
+**Response:** `201 Created`
+```json
+{
+  "token": "token_value",
+  "csrf_token": "csrf_token_value",
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "created_at": "2024-01-15T10:30:00Z",
+    "modified_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+**Cookies Set:**
+- `access_token` - JWT access token (30 minutes)
+- `refresh_token` - Refresh token (7 days, configurable)
+- `csrf_token` - CSRF protection token (24 hours)
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON, missing required fields, or password too short
+- `409 Conflict` - Email already registered
+
+### Login
+
+Authenticate and receive access tokens.
+
+**Endpoint:** `POST /auth/login`
+
+**Request Body:**
+```json
+{
+  "email": "john@example.com",
+  "password": "securepassword123"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `email` | string | Yes | User's email address |
+| `password` | string | Yes | User's password |
+
+**Response:** `200 OK`
+```json
+{
+  "token": "token_value",
+  "csrf_token": "csrf_token_value",
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "created_at": "2024-01-15T10:30:00Z",
+    "modified_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+**Cookies Set:** Same as register endpoint
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `401 Unauthorized` - Invalid email or password
+
+### Refresh Token
+
+Refresh access token using a valid refresh token.
+
+**Endpoint:** `POST /auth/refresh`
+
+**Request:** No body required. Refresh token should be provided via cookie or `Authorization` header.
+
+**Response:** `200 OK`
+```json
+{
+  "token": "token_value",
+  "csrf_token": "csrf_token_value"
+}
+```
+
+**Cookies Set:** New tokens with updated expiration times
+
+**Error Responses:**
+- `401 Unauthorized` - Refresh token missing, invalid, expired, or revoked
+
+### Get Current User
+
+Get information about the currently authenticated user.
+
+**Endpoint:** `GET /auth/me`
+
+**Authentication:** Required (access token)
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "name": "John Doe",
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized` - Authentication required
+
+### Logout
+
+Logout and revoke refresh token.
+
+**Endpoint:** `POST /auth/logout`
+
+**Authentication:** Required (access token + CSRF token)
+
+**Request:** No body required. Refresh token should be provided via cookie or `Authorization` header.
+
+**Response:** `200 OK`
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+**Cookies Cleared:** All authentication cookies are cleared
+
+**Error Responses:**
+- `401 Unauthorized` - Authentication required
+
+### Get CSRF Token
+
+Get a CSRF token for state-changing operations.
+
+**Endpoint:** `GET /auth/csrf-token`
+
+**Authentication:** Required (access token)
+
+**Response:** `200 OK`
+```json
+{
+  "csrf_token": "csrf_token_value"
+}
+```
+
+**Cookies Set:** CSRF token cookie (24 hours)
+
+**Error Responses:**
+- `401 Unauthorized` - Authentication required
+
+### Authentication Headers
+
+For API clients that prefer header-based authentication:
+
+1. **Access Token:** Include in `Authorization` header:
+   ```
+   Authorization: Bearer <access_token>
+   ```
+
+2. **CSRF Token:** Include in `X-CSRF-Token` header for POST, PUT, PATCH, DELETE requests:
+   ```
+   X-CSRF-Token: <csrf_token>
+   ```
+
+3. **Refresh Token:** Include in `Authorization` header when refreshing:
+   ```
+   Authorization: Bearer <refresh_token>
+   ```
+
+**Note:** Cookie-based authentication is also supported and is the recommended approach for web applications.
 
 ---
 
@@ -895,8 +1163,8 @@ Retrieve all transactions for a specific group within a date range using the nes
 **Query Parameters:**
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `start_date` | string | Yes | - | Start date in YYYY-MM-DD format |
-| `end_date` | string | Yes | - | End date in YYYY-MM-DD format |
+| `start_date` | string | No | 1 year ago | Start date in YYYY-MM-DD format |
+| `end_date` | string | No | today | End date in YYYY-MM-DD format |
 | `limit` | integer | No | 100 | Maximum number of transactions to return |
 | `offset` | integer | No | 0 | Number of transactions to skip |
 
@@ -924,7 +1192,8 @@ Retrieve all transactions for a specific group within a date range using the nes
 ```
 
 **Error Responses:**
-- `400 Bad Request` - Invalid group ID or missing/invalid date parameters
+- `400 Bad Request` - Invalid group ID or invalid date format
+- `403 Forbidden` - User is not a member of this group
 
 ### Create Transaction (Nested Route)
 
@@ -956,7 +1225,7 @@ Create a new transaction within a group using the nested route.
 | `amount` | string (decimal) | Yes | Transaction amount |
 | `category` | string | No | Transaction category (nullable) |
 | `note` | string | No | Additional notes (nullable) |
-| `by_user` | integer | Yes | ID of user who created the transaction |
+| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
 
 **Note:** The `group_id` from the URL path is used; any `group_id` in the request body is ignored.
 
@@ -993,8 +1262,8 @@ Retrieve all transactions for a specific group within a date range using direct 
 **Query Parameters:**
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `start_date` | string | Yes | - | Start date in YYYY-MM-DD format |
-| `end_date` | string | Yes | - | End date in YYYY-MM-DD format |
+| `start_date` | string | No | 1 year ago | Start date in YYYY-MM-DD format |
+| `end_date` | string | No | today | End date in YYYY-MM-DD format |
 | `limit` | integer | No | 100 | Maximum number of transactions to return |
 | `offset` | integer | No | 0 | Number of transactions to skip |
 
@@ -1022,7 +1291,8 @@ Retrieve all transactions for a specific group within a date range using direct 
 ```
 
 **Error Responses:**
-- `400 Bad Request` - Invalid group ID or missing/invalid date parameters
+- `400 Bad Request` - Invalid group ID or invalid date format
+- `403 Forbidden` - User is not a member of this group
 
 ### Get Transaction by ID
 
@@ -1082,7 +1352,7 @@ Create a new transaction using direct access route.
 | `amount` | string (decimal) | Yes | Transaction amount |
 | `category` | string | No | Transaction category (nullable) |
 | `note` | string | No | Additional notes (nullable) |
-| `by_user` | integer | Yes | ID of user who created the transaction |
+| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
 
 **Response:** `201 Created`
 ```json
@@ -1135,7 +1405,7 @@ Update an existing transaction.
 | `amount` | string (decimal) | Yes | Transaction amount |
 | `category` | string | No | Transaction category (nullable) |
 | `note` | string | No | Additional notes (nullable) |
-| `by_user` | integer | Yes | ID of user who created the transaction |
+| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
 
 **Response:** `200 OK`
 ```json
@@ -1265,7 +1535,7 @@ Create multiple splits for a transaction atomically, ensuring they add up to 100
 | `splits` | array | Yes | Array of split objects |
 | `splits[].split_percent` | decimal | Yes | Percentage of transaction amount (0.0 to 1.0) |
 | `splits[].split_amount` | decimal | Yes | Amount assigned to this split |
-| `splits[].split_user` | integer | No | User ID responsible for this split (nullable) |
+| `splits[].split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
 
 **Validation:**
 - ✅ All split percentages must sum to exactly 1.0 (100%)
@@ -1442,7 +1712,7 @@ Create a new split for a transaction using the nested route.
 |-------|------|----------|-------------|
 | `split_percent` | string (decimal) | Yes | Percentage of transaction amount |
 | `split_amount` | string (decimal) | Yes | Amount assigned to this split |
-| `split_user` | integer | No | User ID responsible for this split (nullable) |
+| `split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
 
 **Note:** The `transaction_id` from the URL path is used; any `transaction_id` in the request body is ignored.
 
@@ -1591,7 +1861,7 @@ Create a new split for a transaction using direct access route.
 | `transaction_id` | integer | Yes | Transaction ID |
 | `split_percent` | string (decimal) | Yes | Percentage of transaction amount |
 | `split_amount` | string (decimal) | Yes | Amount assigned to this split |
-| `split_user` | integer | No | User ID responsible for this split (nullable) |
+| `split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
 
 **Response:** `201 Created`
 ```json
@@ -1636,7 +1906,7 @@ Update an existing split.
 |-------|------|----------|-------------|
 | `split_percent` | string (decimal) | Yes | Percentage of transaction amount |
 | `split_amount` | string (decimal) | Yes | Amount assigned to this split |
-| `split_user` | integer | No | User ID responsible for this split (nullable) |
+| `split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
 
 **Response:** `200 OK`
 ```json
