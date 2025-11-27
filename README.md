@@ -2,6 +2,19 @@
 
 A RESTful API for managing shared expenses and transaction splitting within groups. This API allows users to create groups, track transactions, and split costs among group members.
 
+## Table of Contents
+
+1. [Quick Reference](#quick-reference---all-routes)
+2. [API Structure](#api-structure)
+3. [Authentication](#authentication)
+4. [Users](#users)
+5. [Groups](#groups)
+6. [Group Members](#group-members)
+7. [Transactions](#transactions)
+8. [Splits](#splits)
+9. [Group Balances](#group-balances)
+10. [Error Handling](#error-handling)
+
 ## Base URL
 
 ```
@@ -11,89 +24,74 @@ http://localhost:8080
 ## Quick Reference - All Routes
 
 ### Public Routes (No Authentication Required)
-- `GET /` - Health check / Hello World
-- `POST /auth/register` - Register new user
-- `POST /auth/login` - Login
-- `POST /auth/refresh` - Refresh access token
+1. `POST /auth/register` - Register new user
+2. `POST /auth/login` - Login
+3. `POST /auth/refresh` - Refresh access token
 
 ### Protected Routes (Authentication + CSRF Required)
 
 #### Authentication
-- `GET /auth/me` - Get current authenticated user
-- `POST /auth/logout` - Logout (revoke refresh token)
-- `GET /auth/csrf-token` - Get CSRF token
+4. `GET /auth/me` - Get current authenticated user
+5. `POST /auth/logout` - Logout (revoke refresh token)
+6. `GET /auth/csrf-token` - Get CSRF token
 
 #### Users
-- `GET /users/` - List users (paginated, filtered by authenticated user)
-- `POST /users/` - Create user
-- `GET /users/{id}` - Get user by ID
-- `PUT /users/{id}` - Update user
-- `PATCH /users/{id}` - Update user
-- `DELETE /users/{id}` - Delete user
-- `GET /users/{user_id}/transactions` - List transactions by user
-- `GET /users/{user_id}/balances` - Get user balances across all groups
+7. `GET /users/` - List users (paginated, filtered by authenticated user)
+8. `GET /users/{id}` - Get user by ID
+
+9. `GET /users/me/balances` - Get balances for current user across all groups
+10. a`GET /users/me/splits` - List splits for current user
+10. b`GET /users/me/transactions` - List transactions for current user
 
 #### Groups
-- `GET /groups/` - List groups (filtered by authenticated user's membership)
-- `POST /groups/` - Create group (creator automatically added as member)
-- `GET /groups/{id}` - Get group by ID
-- `PUT /groups/{id}` - Update group
-- `PATCH /groups/{id}` - Update group
-- `DELETE /groups/{id}` - Delete group
-- `GET /groups/{group_id}/members` - List group members
-- `POST /groups/{group_id}/members` - Add member to group
-- `POST /groups/{group_id}/members/batch` - Add multiple members (batch)
-- `PUT /groups/{group_id}/members/batch` - Replace all members (batch)
-- `PATCH /groups/{group_id}/members/batch` - Replace all members (batch)
-- `DELETE /groups/{group_id}/members/batch` - Delete all members (batch)
-- `GET /groups/{group_id}/transactions` - List group transactions (with date range)
-- `POST /groups/{group_id}/transactions` - Create transaction in group
-- `GET /groups/{group_id}/balances` - Get group balance report
+11. `GET /groups/` - List groups (filtered by authenticated user's membership)
+12. `GET /groups/{id}` - Get group by ID
+13. `POST /groups/` - Create group (creator automatically added as member)
+14. `PUT | PATCH /groups/{id}` - Update group
+15. `DELETE /groups/{id}` - Delete group
 
-#### Group Members (Direct Access)
-- `POST /group_members/` - Create group member
-- `GET /group_members/{id}` - Get group member by ID
-- `PUT /group_members/{id}` - Update group member
-- `PATCH /group_members/{id}` - Update group member
-- `DELETE /group_members/{id}` - Delete/unlink group member
-- `GET /group_members/group/{group_id}` - List members by group ID
+#### Group Members
+##### Nested
+16.  `GET /groups/{group_id}/members` - List group members
+17. `POST /groups/{group_id}/members` - Add member to group
+
+##### Direct Access
+18. `GET /group_members/{id}` - Get group member by ID
+19. UPDATE: `PUT | PATCH /group_members/{id}` - Update group member // TODO: Should allow update of member name
+20. `DELETE /group_members/{id}` - Delete/unlink group member
+
+##### Nested Batch Operations
+21. `POST /groups/{group_id}/members/batch` - Add multiple members (batch)
+22. `PUT | PATCH /groups/{group_id}/members/batch` - Update all members (batch)
+23. `DELETE /groups/{group_id}/members/batch` - Delete all members (batch)
+
+##### Balances
+24. `GET /groups/{group_id}/balances` - Get group balance report
 
 #### Transactions
-- `GET /transactions/` - List transactions (filtered by authenticated user's groups)
-- `POST /transactions/` - Create transaction
-- `GET /transactions/{id}` - Get transaction by ID
-- `PUT /transactions/{id}` - Update transaction
-- `PATCH /transactions/{id}` - Update transaction
-- `DELETE /transactions/{id}` - Delete transaction
-- `GET /transactions/{transaction_id}/splits` - List splits for transaction
-- `POST /transactions/{transaction_id}/splits` - Create split for transaction
+25. UPDATE `GET /transactions/` - List transactions (filtered by authenticated user's groups) // Should be for current user
+26. `GET /groups/{group_id}/transactions` - List group transactions (with date range)
+27. `POST /groups/{group_id}/transactions` - Create transaction in group
+28. `GET /transactions/{id}` - Get transaction by ID
+29. `POST /transactions/` - Create transaction
+30. `PUT | PATCH /transactions/{id}` - Update transaction
+31. `DELETE /transactions/{id}` - Delete transaction
 
 #### Splits
-- `GET /splits/` - List splits (filtered by authenticated user's groups)
-- `GET /splits/{id}` - Get split by ID
-- `GET /splits/transaction/{transaction_id}` - List splits by transaction ID
-- `GET /splits/user/{user_id}` - List splits by user ID
-- `POST /splits/transaction/{transaction_id}/batch` - Create/replace all splits (batch, recommended)
-- `PUT /splits/transaction/{transaction_id}/batch` - Replace all splits (batch, recommended)
-- `PATCH /splits/transaction/{transaction_id}/batch` - Replace all splits (batch, recommended)
+##### Direct Access
+32. `GET /splits/` - List splits (filtered by authenticated user's groups)
+33. `GET /splits/{id}` - Get split by ID
+34. `GET /transactions/{transaction_id}/splits` - List splits for transaction
+##### Nested Batch Operations
+35. `POST /transactions/{transaction_id}/splits` - Create/replace splits
+36. `PUT | PATCH /transactions/{transaction_id}/splits` - Replace all splits
+
+---
 
 **Note:** All protected routes require:
 1. Valid authentication token (via cookie or Authorization header)
 2. Valid CSRF token (for state-changing operations: POST, PUT, PATCH, DELETE)
 
-## Table of Contents
-
-- [API Structure](#api-structure)
-- [Authentication](#authentication)
-- [Users](#users)
-- [Groups](#groups)
-- [Group Members](#group-members)
-- [Transactions](#transactions)
-- [Splits](#splits)
-- [Group Balances](#group-balances)
-- [Error Handling](#error-handling)
-
----
 
 ## API Structure
 
@@ -118,13 +116,12 @@ For flexibility, the API also provides direct access to resources:
 
 Both approaches are fully supported and can be used interchangeably.
 
----
 
 ## Authentication
 
 The API uses JWT-based authentication with refresh tokens and CSRF protection. Most endpoints require authentication, except for registration, login, and token refresh.
 
-### Register
+### 1. Register
 
 Create a new user account.
 
@@ -168,7 +165,7 @@ Create a new user account.
 - `400 Bad Request` - Invalid JSON, missing required fields, or password too short
 - `409 Conflict` - Email already registered
 
-### Login
+### 2. Login
 
 Authenticate and receive access tokens.
 
@@ -207,7 +204,7 @@ Authenticate and receive access tokens.
 - `400 Bad Request` - Invalid JSON or missing required fields
 - `401 Unauthorized` - Invalid email or password
 
-### Refresh Token
+### 3. Refresh Token
 
 Refresh access token using a valid refresh token.
 
@@ -228,7 +225,7 @@ Refresh access token using a valid refresh token.
 **Error Responses:**
 - `401 Unauthorized` - Refresh token missing, invalid, expired, or revoked
 
-### Get Current User
+### 4. Get Current User
 
 Get information about the currently authenticated user.
 
@@ -249,7 +246,7 @@ Get information about the currently authenticated user.
 **Error Responses:**
 - `401 Unauthorized` - Authentication required
 
-### Logout
+### 5. Logout
 
 Logout and revoke refresh token.
 
@@ -271,7 +268,7 @@ Logout and revoke refresh token.
 **Error Responses:**
 - `401 Unauthorized` - Authentication required
 
-### Get CSRF Token
+### 6. Get CSRF Token
 
 Get a CSRF token for state-changing operations.
 
@@ -291,7 +288,7 @@ Get a CSRF token for state-changing operations.
 **Error Responses:**
 - `401 Unauthorized` - Authentication required
 
-### Authentication Headers
+#### Authentication Headers
 
 For API clients that prefer header-based authentication:
 
@@ -312,13 +309,11 @@ For API clients that prefer header-based authentication:
 
 **Note:** Cookie-based authentication is also supported and is the recommended approach for web applications.
 
----
-
 ## Users
 
 Manage user accounts in the system.
 
-### List Users
+### 7. List Users
 
 Retrieve a paginated list of all users.
 
@@ -347,7 +342,7 @@ Retrieve a paginated list of all users.
 }
 ```
 
-### Get User by ID
+### 8. Get User by ID
 
 Retrieve a specific user by their ID.
 
@@ -372,16 +367,13 @@ Retrieve a specific user by their ID.
 - `400 Bad Request` - Invalid user ID format
 - `404 Not Found` - User not found
 
-### Get User Balances
+### 9. Get User Balances
 
-Retrieve comprehensive balance information for a specific user across all groups.
+Retrieve comprehensive balance information for the currently authenticated user across all groups.
 
-**Endpoint:** `GET /users/{user_id}/balances`
+**Endpoint:** `GET /users/me/balances`
 
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `user_id` | integer | Yes | User ID |
+**Path Parameters:** None (uses authenticated user ID)
 
 **Response:** `200 OK`
 ```json
@@ -428,108 +420,101 @@ Retrieve comprehensive balance information for a specific user across all groups
 | `group_count` | integer | Number of groups with balances |
 | `member_count` | integer | Number of members with balances |
 
+**Note:** Users can only access their own balances. The endpoint automatically filters to the authenticated user's balances.
+
 **Error Responses:**
-- `400 Bad Request` - Invalid user ID format
+- `401 Unauthorized` - Authentication required
 - `404 Not Found` - User not found
 
-### Create User
+### 10a. List Splits for Current User
 
-Create a new user.
+Retrieve all splits assigned to the currently authenticated user.
 
-**Endpoint:** `POST /users/`
+**Endpoint:** `GET /users/me/splits`
 
-**Request Body:**
-```json
-{
-  "name": "John Doe"
-}
-```
+**Path Parameters:** None (uses authenticated user ID)
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | User's name |
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "name": "John Doe",
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-
-### Update User
-
-Update an existing user's information.
-
-**Endpoint:** `PUT /users/{id}` or `PATCH /users/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | User ID |
-
-**Request Body:**
-```json
-{
-  "name": "Jane Doe"
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | User's updated name |
+**Query Parameters:**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `limit` | integer | No | 100 | Maximum number of splits to return |
+| `offset` | integer | No | 0 | Number of splits to skip |
 
 **Response:** `200 OK`
 ```json
 {
-  "id": 1,
-  "name": "Jane Doe",
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T12:45:00Z"
+  "splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "50.00",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "limit": 100,
+  "offset": 0
 }
 ```
 
+**Note:** Users can only access their own splits. The endpoint automatically filters to splits where the authenticated user is the split_user.
+
 **Error Responses:**
-- `400 Bad Request` - Invalid user ID or request body
-- `404 Not Found` - User not found
+- `401 Unauthorized` - Authentication required
 
-### Delete User
+### 10b. List Transactions for Current User
 
-Delete a user from the system.
+Retrieve all transactions created by the currently authenticated user.
 
-**Endpoint:** `DELETE /users/{id}`
+**Endpoint:** `GET /users/me/transactions`
 
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | User ID |
+**Path Parameters:** None (uses authenticated user ID)
+
+**Query Parameters:**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `start_date` | string | No | 1 year ago | Start date in YYYY-MM-DD format |
+| `end_date` | string | No | today | End date in YYYY-MM-DD format |
+| `limit` | integer | No | 100 | Maximum number of transactions to return |
+| `offset` | integer | No | 0 | Number of transactions to skip |
 
 **Response:** `200 OK`
 ```json
 {
-  "id": 1,
-  "name": "John Doe",
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
+  "transactions": [
+    {
+      "id": 1,
+      "group_id": 1,
+      "name": "Grocery Shopping",
+      "transaction_date": "2024-01-15T00:00:00Z",
+      "amount": "125.50",
+      "category": "Groceries",
+      "note": "Weekly shopping at Whole Foods",
+      "by_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "limit": 100,
+  "offset": 0
 }
 ```
 
-**Error Responses:**
-- `400 Bad Request` - Invalid user ID format
-- `404 Not Found` - User not found or unable to delete
+**Note:** Users can only access their own transactions. The endpoint automatically filters to the authenticated user's transactions.
 
----
+**Error Responses:**
+- `401 Unauthorized` - Authentication required
 
 ## Groups
 
 Manage groups for organizing shared expenses.
 
-### List Groups
+### 11. List Groups
 
 Retrieve a paginated list of all groups.
 
@@ -556,7 +541,7 @@ Retrieve a paginated list of all groups.
 }
 ```
 
-### Get Group by ID
+### 12. Get Group by ID
 
 Retrieve a specific group by its ID.
 
@@ -579,7 +564,7 @@ Retrieve a specific group by its ID.
 - `400 Bad Request` - Invalid group ID format
 - `404 Not Found` - Group not found
 
-### Create Group
+### 13. Create Group
 
 Create a new group.
 
@@ -607,7 +592,7 @@ Create a new group.
 **Error Responses:**
 - `400 Bad Request` - Invalid JSON or missing required fields
 
-### Update Group
+### 14. Update Group
 
 Update an existing group's information.
 
@@ -641,7 +626,7 @@ Update an existing group's information.
 - `400 Bad Request` - Invalid group ID or request body
 - `404 Not Found` - Group not found
 
-### Delete Group
+### 15. Delete Group
 
 Delete a group from the system.
 
@@ -664,13 +649,11 @@ Delete a group from the system.
 - `400 Bad Request` - Invalid group ID format
 - `404 Not Found` - Group not found or unable to delete
 
----
-
 ## Group Members
 
 Manage memberships of users within groups.
 
-### List Group Members (Nested Route)
+### 16. List Group Members (Nested Route)
 
 Retrieve a paginated list of all members in a specific group.
 
@@ -710,7 +693,7 @@ Retrieve a paginated list of all members in a specific group.
 **Error Responses:**
 - `400 Bad Request` - Invalid group ID format
 
-### Create Group Member (Nested Route)
+### 17. Create Group Member (Nested Route)
 
 Add a user to a group using the nested route.
 
@@ -746,47 +729,7 @@ Add a user to a group using the nested route.
 **Error Responses:**
 - `400 Bad Request` - Invalid JSON or missing required fields
 
-### List Group Members by Group ID (Direct Access)
-
-Retrieve a paginated list of all members in a specific group using direct access route.
-
-**Endpoint:** `GET /group_members/group/{group_id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `limit` | integer | No | 100 | Maximum number of members to return |
-| `offset` | integer | No | 0 | Number of members to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "group_members": [
-    {
-      "id": 1,
-      "group_id": 1,
-      "group_name": "Roommates",
-      "member_name": "John Doe",
-      "user_id": 1,
-      "user_name": "John Doe",
-      "created_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid group ID format
-
-### Get Group Member by ID
+### 18. Get Group Member by ID
 
 Retrieve a specific group member by their ID.
 
@@ -814,40 +757,7 @@ Retrieve a specific group member by their ID.
 - `400 Bad Request` - Invalid group member ID format
 - `404 Not Found` - Group member not found
 
-### Create Group Member (Direct Access)
-
-Add a user to a group using direct access route.
-
-**Endpoint:** `POST /group_members/`
-
-**Request Body:**
-```json
-{
-  "group_id": 1,
-  "user_id": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-| `user_id` | integer | No | User ID (nullable) |
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "member_name": "John Doe",
-  "user_id": 1,
-  "created_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-
-### Update Group Member
+### 19. Update Group Member
 
 Update a group member's information.
 
@@ -886,7 +796,7 @@ Update a group member's information.
 - `400 Bad Request` - Invalid group member ID or request body
 - `404 Not Found` - Group member not found
 
-### Delete Group Member
+### 20. Delete Group Member
 
 Remove a user from a group.
 
@@ -912,11 +822,11 @@ Remove a user from a group.
 - `400 Bad Request` - Invalid group member ID format
 - `404 Not Found` - Group member not found or unable to delete
 
-### Batch Group Member Operations
+## Batch Group Member Operations
 
 Batch operations allow you to manage multiple group members atomically.
 
-#### Create Group Members (Batch)
+### 21. Create Group Members (Batch)
 
 Add multiple users to a group in a single atomic operation.
 
@@ -977,7 +887,7 @@ Add multiple users to a group in a single atomic operation.
 - `400 Bad Request` - Invalid JSON or missing required fields
 - `400 Bad Request` - At least one member is required
 
-#### Update Group Members (Batch)
+### 22. Update Group Members (Batch)
 
 Replace all members of a group with a new set. This operation atomically deletes existing members and creates new ones.
 
@@ -1043,7 +953,7 @@ Replace all members of a group with a new set. This operation atomically deletes
 - `400 Bad Request` - Invalid JSON or missing required fields
 - `400 Bad Request` - At least one member is required
 
-#### Delete All Group Members (Batch)
+### 23. Delete All Group Members (Batch)
 
 Remove all members from a group in a single atomic operation.
 
@@ -1065,907 +975,11 @@ Remove all members from a group in a single atomic operation.
 **Error Responses:**
 - `400 Bad Request` - Invalid group ID format
 
----
-
-## Transactions
-
-Manage financial transactions within groups.
-
-### List All Transactions
-
-Retrieve a paginated list of all transactions.
-
-**Endpoint:** `GET /transactions/`
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `limit` | integer | No | 100 | Maximum number of transactions to return |
-| `offset` | integer | No | 0 | Number of transactions to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "transactions": [
-    {
-      "id": 1,
-      "group_id": 1,
-      "name": "Grocery Shopping",
-      "transaction_date": "2024-01-15T00:00:00Z",
-      "amount": "125.50",
-      "category": "Groceries",
-      "note": "Weekly shopping at Whole Foods",
-      "by_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-### List Transactions by User (Nested Route)
-
-Retrieve all transactions created by a specific user using the nested route.
-
-**Endpoint:** `GET /users/{user_id}/transactions`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `user_id` | integer | Yes | User ID |
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `limit` | integer | No | 100 | Maximum number of transactions to return |
-| `offset` | integer | No | 0 | Number of transactions to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "transactions": [
-    {
-      "id": 1,
-      "group_id": 1,
-      "name": "Grocery Shopping",
-      "transaction_date": "2024-01-15T00:00:00Z",
-      "amount": "125.50",
-      "category": "Groceries",
-      "note": "Weekly shopping at Whole Foods",
-      "by_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid user ID format
-
-### List Transactions by Group (Nested Route)
-
-Retrieve all transactions for a specific group within a date range using the nested route.
-
-**Endpoint:** `GET /groups/{group_id}/transactions`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `start_date` | string | No | 1 year ago | Start date in YYYY-MM-DD format |
-| `end_date` | string | No | today | End date in YYYY-MM-DD format |
-| `limit` | integer | No | 100 | Maximum number of transactions to return |
-| `offset` | integer | No | 0 | Number of transactions to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "transactions": [
-    {
-      "id": 1,
-      "group_id": 1,
-      "name": "Grocery Shopping",
-      "transaction_date": "2024-01-15T00:00:00Z",
-      "amount": "125.50",
-      "category": "Groceries",
-      "note": "Weekly shopping at Whole Foods",
-      "by_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid group ID or invalid date format
-- `403 Forbidden` - User is not a member of this group
-
-### Create Transaction (Nested Route)
-
-Create a new transaction within a group using the nested route.
-
-**Endpoint:** `POST /groups/{group_id}/transactions`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-
-**Request Body:**
-```json
-{
-  "name": "Grocery Shopping",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "125.50",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods",
-  "by_user": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Transaction name |
-| `transaction_date` | string (ISO 8601) | Yes | Date of transaction |
-| `amount` | string (decimal) | Yes | Transaction amount |
-| `category` | string | No | Transaction category (nullable) |
-| `note` | string | No | Additional notes (nullable) |
-| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
-
-**Note:** The `group_id` from the URL path is used; any `group_id` in the request body is ignored.
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "name": "Grocery Shopping",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "125.50",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods",
-  "by_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-
-### List Transactions by Group (Direct Access)
-
-Retrieve all transactions for a specific group within a date range using direct access route.
-
-**Endpoint:** `GET /transactions/group/{group_id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `start_date` | string | No | 1 year ago | Start date in YYYY-MM-DD format |
-| `end_date` | string | No | today | End date in YYYY-MM-DD format |
-| `limit` | integer | No | 100 | Maximum number of transactions to return |
-| `offset` | integer | No | 0 | Number of transactions to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "transactions": [
-    {
-      "id": 1,
-      "group_id": 1,
-      "name": "Grocery Shopping",
-      "transaction_date": "2024-01-15T00:00:00Z",
-      "amount": "125.50",
-      "category": "Groceries",
-      "note": "Weekly shopping at Whole Foods",
-      "by_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid group ID or invalid date format
-- `403 Forbidden` - User is not a member of this group
-
-### Get Transaction by ID
-
-Retrieve a specific transaction by its ID.
-
-**Endpoint:** `GET /transactions/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | Transaction ID |
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "name": "Grocery Shopping",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "125.50",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods",
-  "by_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid transaction ID format
-- `404 Not Found` - Transaction not found
-
-### Create Transaction (Direct Access)
-
-Create a new transaction using direct access route.
-
-**Endpoint:** `POST /transactions/`
-
-**Request Body:**
-```json
-{
-  "group_id": 1,
-  "name": "Grocery Shopping",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "125.50",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods",
-  "by_user": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-| `name` | string | Yes | Transaction name |
-| `transaction_date` | string (ISO 8601) | Yes | Date of transaction |
-| `amount` | string (decimal) | Yes | Transaction amount |
-| `category` | string | No | Transaction category (nullable) |
-| `note` | string | No | Additional notes (nullable) |
-| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "name": "Grocery Shopping",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "125.50",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods",
-  "by_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-
-### Update Transaction
-
-Update an existing transaction.
-
-**Endpoint:** `PUT /transactions/{id}` or `PATCH /transactions/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | Transaction ID |
-
-**Request Body:**
-```json
-{
-  "group_id": 1,
-  "name": "Grocery Shopping - Updated",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "135.75",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods - Updated total",
-  "by_user": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `group_id` | integer | Yes | Group ID |
-| `name` | string | Yes | Transaction name |
-| `transaction_date` | string (ISO 8601) | Yes | Date of transaction |
-| `amount` | string (decimal) | Yes | Transaction amount |
-| `category` | string | No | Transaction category (nullable) |
-| `note` | string | No | Additional notes (nullable) |
-| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "name": "Grocery Shopping - Updated",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "135.75",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods - Updated total",
-  "by_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T12:45:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid transaction ID or request body
-- `404 Not Found` - Transaction not found
-
-### Delete Transaction
-
-Delete a transaction from the system.
-
-**Endpoint:** `DELETE /transactions/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | Transaction ID |
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "group_id": 1,
-  "name": "Grocery Shopping",
-  "transaction_date": "2024-01-15T00:00:00Z",
-  "amount": "125.50",
-  "category": "Groceries",
-  "note": "Weekly shopping at Whole Foods",
-  "by_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid transaction ID format
-- `404 Not Found` - Transaction not found or unable to delete
-
----
-
-## Splits
-
-Manage how transaction costs are split among group members.
-
-### List All Splits
-
-Retrieve a paginated list of all splits.
-
-**Endpoint:** `GET /splits/`
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `limit` | integer | No | 100 | Maximum number of splits to return |
-| `offset` | integer | No | 0 | Number of splits to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "splits": [
-    {
-      "id": 1,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "50.00",
-      "split_amount": "62.75",
-      "split_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-### Batch Split Operations
-
-Batch operations ensure that splits always add up to 100% of the transaction amount. These are the recommended endpoints for managing splits.
-
-#### Create Splits for Transaction (Batch)
-
-Create multiple splits for a transaction atomically, ensuring they add up to 100%.
-
-**Endpoint:** `POST /splits/transaction/{transaction_id}/batch`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `transaction_id` | integer | Yes | Transaction ID |
-
-**Request Body:**
-```json
-{
-  "splits": [
-    {
-      "split_percent": 0.50,
-      "split_amount": 62.75,
-      "split_user": 1
-    },
-    {
-      "split_percent": 0.50,
-      "split_amount": 62.75,
-      "split_user": 2
-    }
-  ]
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `splits` | array | Yes | Array of split objects |
-| `splits[].split_percent` | decimal | Yes | Percentage of transaction amount (0.0 to 1.0) |
-| `splits[].split_amount` | decimal | Yes | Amount assigned to this split |
-| `splits[].split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
-
-**Validation:**
-- ✅ All split percentages must sum to exactly 1.0 (100%)
-- ✅ All split amounts must sum to transaction amount (within 1 cent tolerance)
-- ✅ At least one split is required
-- ✅ Transaction must exist
-
-**Response:** `201 Created`
-```json
-{
-  "splits": [
-    {
-      "id": 1,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "0.500000",
-      "split_amount": "62.75",
-      "split_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    },
-    {
-      "id": 2,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "0.500000",
-      "split_amount": "62.75",
-      "split_user": 2,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "message": "Successfully created 2 splits"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-- `400 Bad Request` - Split percentages must add up to 100%
-- `400 Bad Request` - Split amounts must add up to transaction amount
-- `400 Bad Request` - At least one split is required
-
-#### Update All Splits for Transaction (Batch)
-
-Atomically replace ALL existing splits with a new set. This operation ensures splits always add up to 100%.
-
-**Endpoint:** `PUT /splits/transaction/{transaction_id}/batch` or `PATCH /splits/transaction/{transaction_id}/batch`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `transaction_id` | integer | Yes | Transaction ID |
-
-**Request Body:**
-```json
-{
-  "splits": [
-    {
-      "split_percent": 0.333333,
-      "split_amount": 33.33,
-      "split_user": 1
-    },
-    {
-      "split_percent": 0.333333,
-      "split_amount": 33.33,
-      "split_user": 2
-    },
-    {
-      "split_percent": 0.333334,
-      "split_amount": 33.34,
-      "split_user": 3
-    }
-  ]
-}
-```
-
-**Response:** `200 OK`
-```json
-{
-  "deleted_splits": [
-    {
-      "id": 1,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "0.500000",
-      "split_amount": "62.75",
-      "split_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "new_splits": [
-    {
-      "id": 2,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "0.333333",
-      "split_amount": "33.33",
-      "split_user": 1,
-      "created_at": "2024-01-15T12:00:00Z",
-      "modified_at": "2024-01-15T12:00:00Z"
-    }
-  ],
-  "message": "Successfully replaced 1 splits with 1 new splits"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-- `400 Bad Request` - Split percentages must add up to 100%
-- `400 Bad Request` - Split amounts must add up to transaction amount
-- `400 Bad Request` - At least one split is required
-
-**Note:** See [SPLIT_API_GUIDE.md](Documentation/SPLIT_API_GUIDE.md) for detailed information on safe split management.
-
-### List Splits by Transaction (Nested Route)
-
-Retrieve all splits for a specific transaction using the nested route.
-
-**Endpoint:** `GET /transactions/{transaction_id}/splits`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `transaction_id` | integer | Yes | Transaction ID |
-
-**Response:** `200 OK`
-```json
-{
-  "splits": [
-    {
-      "id": 1,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "50.00",
-      "split_amount": "62.75",
-      "split_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 1,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid transaction ID format
-
-### Create Split (Nested Route)
-
-⚠️ **Warning:** Creating individual splits can leave transactions in an invalid state. Use batch operations (`POST /splits/transaction/{transaction_id}/batch`) instead.
-
-Create a new split for a transaction using the nested route.
-
-**Endpoint:** `POST /transactions/{transaction_id}/splits`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `transaction_id` | integer | Yes | Transaction ID |
-
-**Request Body:**
-```json
-{
-  "split_percent": "50.00",
-  "split_amount": "62.75",
-  "split_user": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `split_percent` | string (decimal) | Yes | Percentage of transaction amount |
-| `split_amount` | string (decimal) | Yes | Amount assigned to this split |
-| `split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
-
-**Note:** The `transaction_id` from the URL path is used; any `transaction_id` in the request body is ignored.
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "transaction_id": 1,
-  "tx_amount": "125.50",
-  "split_percent": "50.00",
-  "split_amount": "62.75",
-  "split_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-
-### List Splits by Transaction (Direct Access)
-
-Retrieve all splits for a specific transaction using direct access route.
-
-**Endpoint:** `GET /splits/transaction/{transaction_id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `transaction_id` | integer | Yes | Transaction ID |
-
-**Response:** `200 OK`
-```json
-{
-  "splits": [
-    {
-      "id": 1,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "50.00",
-      "split_amount": "62.75",
-      "split_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 1,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid transaction ID format
-
-### List Splits by User
-
-Retrieve all splits assigned to a specific user.
-
-**Endpoint:** `GET /splits/user/{user_id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `user_id` | integer | Yes | User ID |
-
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `limit` | integer | No | 100 | Maximum number of splits to return |
-| `offset` | integer | No | 0 | Number of splits to skip |
-
-**Response:** `200 OK`
-```json
-{
-  "splits": [
-    {
-      "id": 1,
-      "transaction_id": 1,
-      "tx_amount": "125.50",
-      "split_percent": "50.00",
-      "split_amount": "62.75",
-      "split_user": 1,
-      "created_at": "2024-01-15T10:30:00Z",
-      "modified_at": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "count": 1,
-  "limit": 100,
-  "offset": 0
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid user ID format
-
-### Get Split by ID
-
-Retrieve a specific split by its ID.
-
-**Endpoint:** `GET /splits/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | Split ID |
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "transaction_id": 1,
-  "tx_amount": "125.50",
-  "split_percent": "50.00",
-  "split_amount": "62.75",
-  "split_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid split ID format
-- `404 Not Found` - Split not found
-
-### Create Split (Direct Access)
-
-⚠️ **Warning:** Creating individual splits can leave transactions in an invalid state. Use batch operations (`POST /splits/transaction/{transaction_id}/batch`) instead.
-
-Create a new split for a transaction using direct access route.
-
-**Endpoint:** `POST /splits/`
-
-**Request Body:**
-```json
-{
-  "transaction_id": 1,
-  "split_percent": "50.00",
-  "split_amount": "62.75",
-  "split_user": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `transaction_id` | integer | Yes | Transaction ID |
-| `split_percent` | string (decimal) | Yes | Percentage of transaction amount |
-| `split_amount` | string (decimal) | Yes | Amount assigned to this split |
-| `split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
-
-**Response:** `201 Created`
-```json
-{
-  "id": 1,
-  "transaction_id": 1,
-  "tx_amount": "125.50",
-  "split_percent": "50.00",
-  "split_amount": "62.75",
-  "split_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid JSON or missing required fields
-
-### Update Split
-
-⚠️ **Warning:** Updating individual splits can leave transactions in an invalid state. Use batch operations (`PUT /splits/transaction/{transaction_id}/batch`) instead.
-
-Update an existing split.
-
-**Endpoint:** `PUT /splits/{id}` or `PATCH /splits/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | Split ID |
-
-**Request Body:**
-```json
-{
-  "split_percent": "60.00",
-  "split_amount": "75.30",
-  "split_user": 1
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `split_percent` | string (decimal) | Yes | Percentage of transaction amount |
-| `split_amount` | string (decimal) | Yes | Amount assigned to this split |
-| `split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "transaction_id": 1,
-  "tx_amount": "125.50",
-  "split_percent": "60.00",
-  "split_amount": "75.30",
-  "split_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T12:45:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid split ID or request body
-- `404 Not Found` - Split not found
-
-### Delete Split
-
-⚠️ **Warning:** Deleting individual splits can leave transactions in an invalid state. Use batch operations (`PUT /splits/transaction/{transaction_id}/batch`) to replace all splits instead.
-
-Delete a split from the system.
-
-**Endpoint:** `DELETE /splits/{id}`
-
-**Path Parameters:**
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `id` | integer | Yes | Split ID |
-
-**Response:** `200 OK`
-```json
-{
-  "id": 1,
-  "transaction_id": 1,
-  "tx_amount": "125.50",
-  "split_percent": "50.00",
-  "split_amount": "62.75",
-  "split_user": 1,
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
-```
-
-**Error Responses:**
-- `400 Bad Request` - Invalid split ID format
-- `404 Not Found` - Split not found or unable to delete
-
-**Note:** For safe split management, see [SPLIT_API_GUIDE.md](Documentation/SPLIT_API_GUIDE.md)
-
----
-
 ## Group Balances
 
 Retrieve balance and settlement information for groups.
 
-### Get Group Balances
+### 24. Get Group Balances
 
 Retrieve comprehensive balance information for a group, including detailed debts, net balances, and simplified settlement paths.
 
@@ -2044,13 +1058,568 @@ Retrieve comprehensive balance information for a group, including detailed debts
 - **Checking your overall position:** Use the `net_balances` array
 - **Settling up efficiently:** Use the `simplified_owes` array
 
----
+## Transactions
+
+Manage financial transactions within groups.
+
+### 25. List Transactions
+
+Retrieve a paginated list of transactions within the current user's scope
+
+**Endpoint:** `GET /transactions/`
+
+**Query Parameters:**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `limit` | integer | No | 100 | Maximum number of transactions to return |
+| `offset` | integer | No | 0 | Number of transactions to skip |
+
+**Response:** `200 OK`
+```json
+{
+  "transactions": [
+    {
+      "id": 1,
+      "group_id": 1,
+      "name": "Grocery Shopping",
+      "transaction_date": "2024-01-15T00:00:00Z",
+      "amount": "125.50",
+      "category": "Groceries",
+      "note": "Weekly shopping at Whole Foods",
+      "by_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+### 26. List Transactions by Group (Nested Route)
+
+Retrieve all transactions for a specific group within a date range using the nested route.
+
+**Endpoint:** `GET /groups/{group_id}/transactions`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+
+**Query Parameters:**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `start_date` | string | No | 1 year ago | Start date in YYYY-MM-DD format |
+| `end_date` | string | No | today | End date in YYYY-MM-DD format |
+| `limit` | integer | No | 100 | Maximum number of transactions to return |
+| `offset` | integer | No | 0 | Number of transactions to skip |
+
+**Response:** `200 OK`
+```json
+{
+  "transactions": [
+    {
+      "id": 1,
+      "group_id": 1,
+      "name": "Grocery Shopping",
+      "transaction_date": "2024-01-15T00:00:00Z",
+      "amount": "125.50",
+      "category": "Groceries",
+      "note": "Weekly shopping at Whole Foods",
+      "by_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid group ID or invalid date format
+- `403 Forbidden` - User is not a member of this group
+
+### 27. Create Transaction (Nested Route)
+
+Create a new transaction within a group using the nested route.
+
+**Endpoint:** `POST /groups/{group_id}/transactions`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+
+**Request Body:**
+```json
+{
+  "name": "Grocery Shopping",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "125.50",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods",
+  "by_user": 1
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Transaction name |
+| `transaction_date` | string (ISO 8601) | Yes | Date of transaction |
+| `amount` | string (decimal) | Yes | Transaction amount |
+| `category` | string | No | Transaction category (nullable) |
+| `note` | string | No | Additional notes (nullable) |
+| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
+
+**Note:** The `group_id` from the URL path is used; any `group_id` in the request body is ignored.
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1,
+  "group_id": 1,
+  "name": "Grocery Shopping",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "125.50",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods",
+  "by_user": 1,
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+
+### 28. Get Transaction by ID
+
+Retrieve a specific transaction by its ID.
+
+**Endpoint:** `GET /transactions/{id}`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | integer | Yes | Transaction ID |
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "group_id": 1,
+  "name": "Grocery Shopping",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "125.50",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods",
+  "by_user": 1,
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid transaction ID format
+- `404 Not Found` - Transaction not found
+
+### 29. Create Transaction (Direct Access)
+
+Create a new transaction using direct access route.
+
+**Endpoint:** `POST /transactions/`
+
+**Request Body:**
+```json
+{
+  "group_id": 1,
+  "name": "Grocery Shopping",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "125.50",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods",
+  "by_user": 1
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+| `name` | string | Yes | Transaction name |
+| `transaction_date` | string (ISO 8601) | Yes | Date of transaction |
+| `amount` | string (decimal) | Yes | Transaction amount |
+| `category` | string | No | Transaction category (nullable) |
+| `note` | string | No | Additional notes (nullable) |
+| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
+
+**Response:** `201 Created`
+```json
+{
+  "id": 1,
+  "group_id": 1,
+  "name": "Grocery Shopping",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "125.50",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods",
+  "by_user": 1,
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+
+### 30. Update Transaction
+
+Update an existing transaction.
+
+**Endpoint:** `PUT /transactions/{id}` or `PATCH /transactions/{id}`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | integer | Yes | Transaction ID |
+
+**Request Body:**
+```json
+{
+  "group_id": 1,
+  "name": "Grocery Shopping - Updated",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "135.75",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods - Updated total",
+  "by_user": 1
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `group_id` | integer | Yes | Group ID |
+| `name` | string | Yes | Transaction name |
+| `transaction_date` | string (ISO 8601) | Yes | Date of transaction |
+| `amount` | string (decimal) | Yes | Transaction amount |
+| `category` | string | No | Transaction category (nullable) |
+| `note` | string | No | Additional notes (nullable) |
+| `by_user` | integer | Yes | Group Member ID who created the transaction (not User ID) |
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "group_id": 1,
+  "name": "Grocery Shopping - Updated",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "135.75",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods - Updated total",
+  "by_user": 1,
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T12:45:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid transaction ID or request body
+- `404 Not Found` - Transaction not found
+
+### 31. Delete Transaction
+
+Delete a transaction from the system.
+
+**Endpoint:** `DELETE /transactions/{id}`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | integer | Yes | Transaction ID |
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "group_id": 1,
+  "name": "Grocery Shopping",
+  "transaction_date": "2024-01-15T00:00:00Z",
+  "amount": "125.50",
+  "category": "Groceries",
+  "note": "Weekly shopping at Whole Foods",
+  "by_user": 1,
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid transaction ID format
+- `404 Not Found` - Transaction not found or unable to delete
+
+## Splits
+
+Manage how transaction costs are split among group members.
+
+### 32. List All Splits
+
+Retrieve a paginated list of all splits.
+
+**Endpoint:** `GET /splits/`
+
+**Query Parameters:**
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `limit` | integer | No | 100 | Maximum number of splits to return |
+| `offset` | integer | No | 0 | Number of splits to skip |
+
+**Response:** `200 OK`
+```json
+{
+  "splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "50.00",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+### 33. Get Split by ID
+
+Retrieve a specific split by its ID.
+
+**Endpoint:** `GET /splits/{id}`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | integer | Yes | Split ID |
+
+**Response:** `200 OK`
+```json
+{
+  "id": 1,
+  "transaction_id": 1,
+  "tx_amount": "125.50",
+  "split_percent": "50.00",
+  "split_amount": "62.75",
+  "split_user": 1,
+  "created_at": "2024-01-15T10:30:00Z",
+  "modified_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid split ID format
+- `404 Not Found` - Split not found
+
+### 34. List Splits by Transaction
+
+Retrieve all splits for a specific transaction using the nested route.
+
+**Endpoint:** `GET /transactions/{transaction_id}/splits`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transaction_id` | integer | Yes | Transaction ID |
+
+**Response:** `200 OK`
+```json
+{
+  "splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "50.00",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1,
+  "limit": 1,
+  "offset": 0
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid transaction ID format
+
+## Batch Split Operations
+
+Batch operations ensure that splits always add up to 100% of the transaction amount. These are the **only** endpoints for creating and updating splits, ensuring data integrity.
+
+### 35. Create/Replace All Splits for Transaction (Batch)
+
+Create or replace all splits for a transaction atomically, ensuring they add up to 100%.
+
+**Endpoint:** `POST /transactions/{transaction_id}/splits`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transaction_id` | integer | Yes | Transaction ID |
+
+**Request Body:**
+```json
+{
+  "splits": [
+    {
+      "split_percent": 0.50,
+      "split_amount": 62.75,
+      "split_user": 1
+    },
+    {
+      "split_percent": 0.50,
+      "split_amount": 62.75,
+      "split_user": 2
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `splits` | array | Yes | Array of split objects |
+| `splits[].split_percent` | decimal | Yes | Percentage of transaction amount (0.0 to 1.0) |
+| `splits[].split_amount` | decimal | Yes | Amount assigned to this split |
+| `splits[].split_user` | integer | No | Group Member ID responsible for this split (not User ID, nullable) |
+
+**Validation:**
+- ✅ All split percentages must sum to exactly 1.0 (100%)
+- ✅ All split amounts must sum to transaction amount (within 1 cent tolerance)
+- ✅ At least one split is required
+- ✅ Transaction must exist
+
+**Response:** `201 Created`
+```json
+{
+  "splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.500000",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": 2,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.500000",
+      "split_amount": "62.75",
+      "split_user": 2,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "message": "Successfully created 2 splits"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `400 Bad Request` - Split percentages must add up to 100%
+- `400 Bad Request` - Split amounts must add up to transaction amount
+- `400 Bad Request` - At least one split is required
+
+### 36. Update All Splits for Transaction (Batch)
+
+Atomically replace ALL existing splits with a new set. This operation ensures splits always add up to 100%.
+
+**Endpoint:** `PUT /splits/transaction/{transaction_id}/batch` or `PATCH /splits/transaction/{transaction_id}/batch`
+
+**Path Parameters:**
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `transaction_id` | integer | Yes | Transaction ID |
+
+**Request Body:**
+```json
+{
+  "splits": [
+    {
+      "split_percent": 0.333333,
+      "split_amount": 33.33,
+      "split_user": 1
+    },
+    {
+      "split_percent": 0.333333,
+      "split_amount": 33.33,
+      "split_user": 2
+    },
+    {
+      "split_percent": 0.333334,
+      "split_amount": 33.34,
+      "split_user": 3
+    }
+  ]
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "deleted_splits": [
+    {
+      "id": 1,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.500000",
+      "split_amount": "62.75",
+      "split_user": 1,
+      "created_at": "2024-01-15T10:30:00Z",
+      "modified_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "new_splits": [
+    {
+      "id": 2,
+      "transaction_id": 1,
+      "tx_amount": "125.50",
+      "split_percent": "0.333333",
+      "split_amount": "33.33",
+      "split_user": 1,
+      "created_at": "2024-01-15T12:00:00Z",
+      "modified_at": "2024-01-15T12:00:00Z"
+    }
+  ],
+  "message": "Successfully replaced 1 splits with 1 new splits"
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Invalid JSON or missing required fields
+- `400 Bad Request` - Split percentages must add up to 100%
+- `400 Bad Request` - Split amounts must add up to transaction amount
+- `400 Bad Request` - At least one split is required
+
+**Note:** See [SPLIT_API_GUIDE.md](Documentation/SPLIT_API_GUIDE.md) for detailed information on safe split management.
 
 ## Error Handling
 
 The API uses standard HTTP status codes to indicate success or failure of requests.
 
-### HTTP Status Codes
+#### HTTP Status Codes
 
 | Status Code | Description |
 |------------|-------------|
@@ -2060,7 +1629,7 @@ The API uses standard HTTP status codes to indicate success or failure of reques
 | `404 Not Found` | Requested resource not found |
 | `500 Internal Server Error` | Server encountered an unexpected error |
 
-### Error Response Format
+#### Error Response Format
 
 Error responses are returned as plain text messages:
 
@@ -2104,27 +1673,6 @@ Some fields may be `null`:
 
 ## Getting Started
 
-1. Ensure the API server is running on port 8080
-2. Use a tool like `curl`, Postman, or your preferred HTTP client
-3. All requests should use `Content-Type: application/json` header when sending JSON data
-4. All responses will have `Content-Type: application/json` header
-
-### Example Request
-
-```bash
-curl -X POST http://localhost:8080/users/ \
-  -H "Content-Type: application/json" \
-  -d '{"name":"John Doe"}'
-```
-
-### Example Response
-
-```json
-{
-  "id": 1,
-  "name": "John Doe",
-  "created_at": "2024-01-15T10:30:00Z",
-  "modified_at": "2024-01-15T10:30:00Z"
-}
+// TODO: usage guide
 ```
 
