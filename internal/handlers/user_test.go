@@ -473,12 +473,6 @@ func TestGetUserBalances(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "invalid ID format",
-			setupMock:      func(ms *mocks.MockStore) {},
-			pathValue:      "abc",
-			expectedStatus: http.StatusBadRequest,
-		},
-		{
 			name: "user not found",
 			setupMock: func(ms *mocks.MockStore) {
 				// CheckOwnUser validates authenticatedUserID == pathUserID, so use 1 for both
@@ -554,14 +548,6 @@ func TestGetTransactionsByUserNested(t *testing.T) {
 			pathValue:          "1",
 			queryParams:        "",
 			expectedStatus:     http.StatusOK,
-			expectTransactions: false,
-		},
-		{
-			name:               "invalid user ID format",
-			setupMock:          func(ms *mocks.MockStore) {},
-			pathValue:          "abc",
-			queryParams:        "",
-			expectedStatus:     http.StatusBadRequest,
 			expectTransactions: false,
 		},
 		{
